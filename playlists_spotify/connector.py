@@ -28,12 +28,12 @@ def schema(configuration: dict):
             "primary_key": ["id", "artist_searched"]
         },
         {
-            "table": "user",
+            "table": "artist",
             "primary_key": ["id"]
         },
         {
-            "table": "playlist_owner",
-            "primary_key": ["playlist", "owner_user"]
+            "table": "user",
+            "primary_key": ["id"]
         },
         {
             "table": "playlist_track",
@@ -59,26 +59,18 @@ def update(configuration: dict, state: dict):
         artist_list = json.loads(conf['artist_list'])
         playlist_limit = conf["playlist_limit"]
         return_limit = conf["return_limit"]
-        log.info("about to authenticate")
 
-        auth_manager = SpotifyClientCredentials(client_id=client_id,
-                                client_secret=client_secret
-                                )
-
+        auth_manager = SpotifyClientCredentials(client_id=client_id,client_secret=client_secret)
         sp = spotipy.Spotify(auth_manager=auth_manager)
-
-        #parsed_url = urllib.parse.urlparse(auth_url)
-        #query_params = urllib.parse.parse_qs(parsed_url.query)
-        #code = query_params.get('code', [None])[0]
         token_info = auth_manager.get_access_token()
+        headers = {"Authorization": f"Bearer {token_info['access_token']}" }
 
         for artist in artist_list:
             log.info(f"starting sync of at most {playlist_limit} playlists for {artist}")
             search_args = {"q": f"\"{artist}\"",
                            "limit": return_limit,
-                           "type": "playlist",
                            "market": "US"}
-            yield from sync_items(sp, "search", search_args, token_info, artist, playlist_limit)
+            yield from sync_items(sp, search_args, headers, artist, playlist_limit)
 
 
     except Exception as e:
@@ -92,37 +84,31 @@ def update(configuration: dict, state: dict):
 # The function takes three parameters:
 # - base_url: The URL to the API endpoint.
 # - params: A dictionary of query parameters to be sent with the API request.
-def sync_items(obj, method, payload, token_info, artist, playlist_limit):
-    # Get response from API call.
-    playlists = []
-    headers = {"Authorization": f"Bearer {token_info['access_token']}" }
-    response_page = get_api_response(obj, method, payload)
-    playlists.extend(item for item in response_page["playlists"]["items"] if item)
-    log.fine("total items " + str(response_page["playlists"]["total"]))
+def sync_items(obj, payload, headers, artist, playlist_limit):
+
+    yield from process_artist(obj, payload, headers, artist)
+
+    stop_playlists = False
+    payload["type"] = "playlist"
+    response_page = get_api_response(obj, "search", payload)
+    playlists = response_page["playlists"]
+    playlist_count = 0
 
     try:
-        # Process the items.
-        while response_page["playlists"]["next"] and len(playlists) < int(playlist_limit):
-            response = rq.get(response_page["playlists"]["next"], headers=headers)
+        while not stop_playlists and playlist_count < int(playlist_limit):
+            for p in playlists["items"]:
+                if p:
+                    yield from process_playlist(obj, p, artist, payload["q"])
+                    playlist_count += 1
+
+            response = rq.get(playlists["next"], headers=headers)
             response_page = response.json()
-            log.fine("total items " + str(response_page["playlists"]["total"]) + ", current items " + str(len(response_page["playlists"]["items"])))
-            playlists.extend(item for item in response_page["playlists"]["items"] if item)
-            log.fine(str(len(playlists))+ " items in playlists")
-            if not response_page["playlists"]:
-                break  # End pagination if there are no records in response.
+            playlists = response_page["playlists"]
 
-        # Iterate over each user in the 'items' list and yield an upsert operation.
-        # The 'upsert' operation inserts the data into the destination.
-        # Update the state with the 'updatedAt' timestamp of the current item.
+            if not response_page["playlists"] or not playlists["next"]:
+                stop_playlists = True
 
-        for p in playlists:
-            if p:
-                yield from process_playlist(obj, p, artist, payload["q"])
-                yield op.checkpoint({})
-
-        # Save the progress by checkpointing the state. This is important for ensuring that the sync process can resume
-        # from the correct position in case of interruptions.
-
+        yield op.checkpoint({})
 
     except Exception as e:
         # Return error response
@@ -130,6 +116,28 @@ def sync_items(obj, method, payload, token_info, artist, playlist_limit):
         stack_trace = traceback.format_exc()
         detailed_message = f"Error Message: {exception_message}\nStack Trace:\n{stack_trace}"
         raise RuntimeError(detailed_message)
+
+def process_artist(obj, payload, headers, artist):
+    stop = False
+    payload["type"] = "artist"
+    response_page = get_api_response(obj, "search", payload)
+    artists = response_page["artists"]
+    count = 0
+
+    while not stop and count < 50:
+        for a in artists["items"]:
+            if a:
+                artist_data = flatten_dict(a)
+                artist_data["artist_searched"] = artist
+                yield op.upsert(table="artist", data=artist_data)
+                count += 1
+
+        response = rq.get(artists["next"], headers=headers)
+        response_page = response.json()
+        artists = response_page["artists"]
+
+        if not response_page["artists"] or artists["next"]:
+            stop = True
 
 
 def process_playlist(obj, p: dict, artist, q):
@@ -145,8 +153,8 @@ def process_playlist(obj, p: dict, artist, q):
         yield from process_owner(pl_data["owner"], playlist_id)
     pl_data.pop('owner')
     yield op.upsert(table="playlist", data=pl_data)
-    playlist_tracks_params = {"playlist_id": playlist_id, "additional_types": "track"}
-    pl_response_page = get_api_response(obj, "playlist_items", playlist_tracks_params)
+    playlist_items_params = {"playlist_id": playlist_id, "additional_types": "track"}
+    pl_response_page = get_api_response(obj, "playlist_items", playlist_items_params)
 
     # if the playlist has tracks, process the tracks
     if pl_response_page["items"]:
