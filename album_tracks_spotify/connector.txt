@@ -4,11 +4,9 @@
 # Import requests to make HTTP calls to API
 import requests as rq
 import traceback
-import datetime
 import json
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
-import urllib.parse
 
 # Import required classes from fivetran_connector_sdk
 from fivetran_connector_sdk import Connector
@@ -52,11 +50,8 @@ def update(configuration: dict, state: dict):
         album_params = {"artist_id": artist_url}
         auth_manager = SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
         sp = spotipy.Spotify(auth_manager=auth_manager)
-        token_info = auth_manager.get_access_token()
-        headers = {"Authorization": f"Bearer {token_info['access_token']}" }
 
-        yield from sync_items(sp, "artist_albums", album_params, headers)
-
+        yield from sync_items(sp, album_params)
 
     except Exception as e:
         # Return error response
@@ -69,31 +64,25 @@ def update(configuration: dict, state: dict):
 # The function takes three parameters:
 # - base_url: The URL to the API endpoint.
 # - params: A dictionary of query parameters to be sent with the API request.
-def sync_items(obj, method, payload, headers):
-    # Get response from API call.
-    stop = False
-    albums_page = get_api_response(obj, method, payload)
-    albums = albums_page["items"]
+def sync_items(obj, payload):
 
     try:
-        while not stop:
-            for a in albums:
-                album_data = flatten_dict(a)
-                yield op.upsert(table="album", data=album_data)
-                track_params = {"album_id": a["id"]}
-                tracks_page = get_api_response(obj, "album_tracks", track_params)
-                tracks = tracks_page["items"]
-                for t in tracks:
-                    track_data = flatten_dict(t)
-                    yield op.upsert(table="track", data=track_data)
+    # For this artist, get one page of albums in a response from the API call.
+        albums_page = get_api_response(obj, "artist_albums", payload)
+        albums = albums_page["items"]
+        for a in albums:
+            album_data = remove_lists(a)
+            album_name = album_data["name"]
+            log.fine(f"adding album {album_name}")
+            yield op.upsert(table="album", data=album_data)
 
-            response = rq.get(albums_page["next"], headers=headers)
-            log.fine("got next album page")
-            albums_page = response.json()
-            albums = albums_page["items"]
-
-            if not albums_page["items"] or not albums_page["next"]:
-                stop = True
+            # For the current album, get one page of tracks in a response from the API call.
+            track_params = {"album_id": a["id"]}
+            tracks_page = get_api_response(obj, "album_tracks", track_params)
+            tracks = tracks_page["items"]
+            for t in tracks:
+                track_data = remove_lists(t)
+                yield op.upsert(table="track", data=track_data)
 
         # Save the progress by checkpointing the state. This is important for ensuring that the sync process can resume
         # from the correct position in case of interruptions.
@@ -122,32 +111,30 @@ def get_api_response(obj, method_name, payload=None):
     response_page = method(**payload)
     return response_page
 
-# The get_next_page_url_from_response function extracts the URL for the next page of data from the API response.
+# The remove_lists function removes keys from a dictionary if the value is a list
 #
 # The function takes one parameter:
-# - response_page: A dictionary representing the parsed JSON response from the API.
+# - d: a dictionary
 #
 # Returns:
-# - The URL for the next page if it exists, otherwise None.
-
-def flatten_dict(d):
-    flattened_dict = {}
+# - new_dict: A dictionary without any values that are lists
+def remove_lists(d):
+    new_dict = {}
     for key, value in d.items():
         if isinstance(value, list):
             pass
         else:
-            flattened_dict[key] = value
+            new_dict[key] = value
 
-    return flattened_dict
+    return new_dict
 
 # This creates the connector object that will use the update function defined in this connector.py file.
-# This example does not use the schema() function. If it did, it would need to be included in the connector object definition.
 connector = Connector(update=update, schema=schema)
 
-# Check if the script is being run as the main module.
-# This is Python's standard entry method allowing your script to be run directly from the command line or IDE 'run' button.
-# This is useful for debugging while you write your code. Note this method is not called by Fivetran when executing your connector in production.
-# Please test using the Fivetran debug command prior to finalizing and deploying your connector.
+# Check if the script is being run as the main module. This is Python's standard entry method allowing your script to
+# be run directly from the command line or IDE 'run' button. This is useful for debugging while you write your code.
+# Note this method is not called by Fivetran when executing your connector in production. Please test using the
+# Fivetran debug command prior to finalizing and deploying your connector.
 if __name__ == "main":
     # Open the configuration.json file and load its contents into a dictionary.
     with open("configuration.json", 'r') as f:
