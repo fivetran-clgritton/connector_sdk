@@ -62,8 +62,8 @@ def update(configuration: dict, state: dict):
 
 
 # The function takes three parameters:
-# - base_url: The URL to the API endpoint.
-# - params: A dictionary of query parameters to be sent with the API request.
+# - obj: The spotify connection object.
+# - payload: A dictionary of query parameters send with the method, if needed
 def sync_items(obj, payload):
 
     try:
