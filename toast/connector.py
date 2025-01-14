@@ -44,6 +44,7 @@ def schema(configuration: dict):
         # orders tables
         {"table": "orders", "primary_key":["guid"]},
         {"table": "orders_check", "primary_key":["guid"]},
+        {"table": "orders_check_payment", "primary_key":["guid"]},
         {"table": "orders_pricing_feature", "primary_key":["guid"]},
         {"table": "orders_marketplace_facilitator_tax_info", "primary_key":["guid"]}
     ]
@@ -245,9 +246,9 @@ def process_orders(base_url, headers, endpoint, table_name, rst_guid, params):
             for o in response_page:
                 if len(o["checks"]) > 0:
                     yield from process_child(o["checks"], "orders_check", "orders_id", o["guid"])
-                if len(o["pricingFeatures"]) > 0:
-                    yield from process_child(o["pricingFeatures"], "orders_pricing_feature", "orders_id", o["guid"])
-                if len(o["marketplaceFacilitatorTaxInfo"]) > 0:
+                # if len(o["pricingFeatures"]) > 0:
+                #    yield from process_child(o["pricingFeatures"], "orders_pricing_feature", "orders_id", o["guid"])
+                if "marketplaceFacilitatorTaxInfo" in o:
                     yield from process_child(o["marketplaceFacilitatorTaxInfo"], "orders_marketplace_facilitator_tax_info", "orders_id", o["guid"])
                 # will need to pop fields that are getting their own table
                 #o.pop("checks")
@@ -267,9 +268,26 @@ def process_orders(base_url, headers, endpoint, table_name, rst_guid, params):
         raise RuntimeError(detailed_message)
 
 def process_child (parent, table_name, id_field_name, id_field):
+    relationships = {"orders_check": [("payments", "orders_check_payment", "orders_check_id"),
+                      ("selections", "orders_check_selection", "orders_check_id"),
+                      ("appliedDiscounts", "orders_check_applied_discount", "orders_check_id") ],
+     "orders_check_applied_discount": [
+         ("comboItems", "orders_check_applied_discount_combo_item", "orders_applied_discount_id"),
+         ("triggers", "orders_check_applied_discount_trigger", "orders_applied_discount_id")]}
     for p in parent:
         log.fine(f"processing {table_name}")
         p[id_field_name] = id_field
+        # DRY this out
+        if table_name in relationships:
+            for child_key, child_table_name, child_id_field_name in relationships[table_name]:
+                if len(p.get(child_key, [])) > 0:  # Use .get() to handle missing keys gracefully
+                    yield from process_child(
+                        p[child_key],
+                        child_table_name,
+                        child_id_field_name,
+                        p["guid"]
+                    )
+
         p = stringify_lists(p)
         yield op.upsert(table=table_name, data=p)
 
