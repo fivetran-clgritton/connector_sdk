@@ -29,11 +29,18 @@ def schema(configuration: dict):
         {"table": "job", "primary_key": ["guid"]},
         {"table": "shift", "primary_key": ["guid"]},
         {"table": "employee", "primary_key": ["guid"]},
+        {"table": "employee_job_reference", "primary_key": ["guid", "employee_guid"]},
+        #{"table": "employee_wage_override", "primary_key": ["guid"]},
         {"table": "time_entry", "primary_key": ["guid"]},
         {"table": "break", "primary_key": ["guid"]},
+        # cash tables
+        {"table": "cash_deposit", "primary_key": ["guid"]},
+        {"table": "cash_entry", "primary_key": ["guid"]},
         # config tables
+        {"table": "alternate_payment_types", "primary_key": ["guid"]},
         {"table": "dining_option", "primary_key": ["guid"]},
         {"table": "discounts", "primary_key": ["guid"]},
+        {"table": "menu", "primary_key": ["guid"]},
         {"table": "menu_group", "primary_key": ["guid"]},
         {"table": "menu_item", "primary_key": ["guid"]},
         {"table": "restaurant_service", "primary_key": ["guid"]},
@@ -44,8 +51,18 @@ def schema(configuration: dict):
         # orders tables
         {"table": "orders", "primary_key":["guid"]},
         {"table": "orders_check", "primary_key":["guid"]},
-        {"table": "orders_pricing_feature", "primary_key":["guid"]},
-        {"table": "orders_marketplace_facilitator_tax_info", "primary_key":["guid"]}
+        {"table": "orders_check_applied_discount", "primary_key":["guid"]},
+        {"table": "orders_check_applied_discount_combo_item", "primary_key":["guid"]},
+        #{"table": "orders_check_applied_discount_trigger", "primary_key": ["guid"]},
+        {"table": "orders_check_applied_service_charge", "primary_key":["guid", "orders_check_guid"]},
+        {"table": "orders_check_payment", "primary_key": ["orders_check_guid", "payment_guid", "orders_guid"]},
+        {"table": "orders_check_selection", "primary_key":["guid", "orders_check_guid"]},
+        #{"table": "orders_check_selection_applied_discount", "primary_key": ["guid"]},
+        #{"table": "orders_check_selection_applied_discount_trigger", "primary_key": ["guid"]},
+        {"table": "orders_check_selection_applied_tax", "primary_key":["guid", "orders_check_selection_guid"]},
+        {"table": "orders_check_selection_modifier", "primary_key":["guid", "orders_check_selection_guid"]},
+        {"table": "orders_pricing_feature", "primary_key":["orders_guid"]},
+        {"table": "payment", "primary_key": ["guid"]}
     ]
 
 # Define the update function, which is a required function, and is called by Fivetran during each sync.
@@ -89,13 +106,26 @@ def sync_items(base_url, headers, ts_from, ts_to, start_timestamp):
     more_data = True
     first_pass = True
 
+    config_endpoints = [("/config/v2/alternatePaymentTypes", "alternate_payment_types"),
+                        ("/config/v2/diningOptions", "dining_option"),
+                        ("/config/v2/discounts", "discounts"),
+                        ("/config/v2/menus", "menu"),
+                        ("/config/v2/menuGroups", "menu_group"),
+                        ("/config/v2/menuItems", "menu_item"),
+                        ("/config/v2/restaurantServices", "restaurant_service"),
+                        ("/config/v2/revenueCenters", "revenue_center"),
+                        ("/config/v2/salesCategories", "sale_category"),
+                        ("/config/v2/serviceAreas", "service_area"),
+                        ("/config/v2/tables", "tables")]
+
     while more_data:
         # set timerange dicts
         timerange_params = {"startDate": ts_from, "endDate": ts_to}
+        modified_params = {"modifiedStartDate": ts_from, "modifiedEndDate": ts_to}
         config_params = {"lastModified": ts_from}
         state = {"to_ts": ts_to}
-        log.fine(f"timerange_params: {timerange_params}")
-        log.fine(f"config_params: {config_params}")
+        #log.fine(f"timerange_params: {timerange_params}")
+        #log.fine(f"config_params: {config_params}")
         log.fine(f"state updated, new state: {repr(state)}")
 
         # Get response from API call.
@@ -113,42 +143,35 @@ def sync_items(base_url, headers, ts_from, ts_to, start_timestamp):
             log.info(f"***** starting restaurant {guid}, {index + 1} of {restaurant_count} ***** ")
             yield op.upsert(table="restaurant", data=r)
 
-            # cash management endpoints
-            # cashmgmt/v1/deposits
-            # cashmgmt/v1/entries
-
             # config endpoints
             # only process these on the first pass since they don't have an end timestamp
             if first_pass:
-                # DRY this out
-                yield from process_config(base_url, headers, "/config/v2/diningOptions", "dining_option",  guid, config_params)
-                yield from process_config(base_url, headers, "/config/v2/discounts", "discounts", guid, config_params)
-                yield from process_config(base_url, headers, "/config/v2/menuGroups", "menu_group", guid,config_params)
-                yield from process_config(base_url, headers, "/config/v2/menuItems", "menu_item", guid, config_params)
-                yield from process_config(base_url, headers, "/config/v2/restaurantServices", "restaurant_service", guid, config_params)
-                yield from process_config(base_url, headers, "/config/v2/revenueCenters", "revenue_center", guid, config_params)
-                yield from process_config(base_url, headers, "/config/v2/salesCategories", "sale_category", guid, config_params)
-                yield from process_config(base_url, headers, "/config/v2/serviceAreas", "service_area", guid, config_params)
-                yield from process_config(base_url, headers, "/config/v2/tables", "tables", guid, config_params)
-                # no timerange_params
-                yield from process_labor(base_url, headers, "/labor/v1/jobs", "job", guid)
-                yield from process_labor(base_url, headers, "/labor/v1/employees", "employee", guid)
+                for endpoint, table_name in config_endpoints:
+                    yield from process_config(base_url, headers, endpoint,table_name, guid, config_params)
+
+                # no timerange_params, only sync during first pass
+                for endpoint, table_name in [("/labor/v1/jobs", "job"),("/labor/v1/employees", "employee")]:
+                    yield from process_labor(base_url, headers, endpoint, table_name, guid)
+
+                first_pass = False
+
+            # cash management endpoints
+            yield from process_cash(base_url, headers, "/cashmgmt/v1/entries", "cash_entry", guid, timerange_params)
+            yield from process_cash(base_url, headers, "/cashmgmt/v1/deposits", "cash_deposit", guid, timerange_params)
 
             # orders
             yield from process_orders(base_url, headers, "/orders/v2/ordersBulk", "orders", guid, timerange_params)
 
             # labor endpoints
-            # with timerange_params -- can only do 30 days at a time
+            # these two endpoints can only retrieve 30 days at a time
             yield from process_labor(base_url, headers, "/labor/v1/shifts", "shift", guid, params=timerange_params)
-            yield from process_labor(base_url, headers, "/labor/v1/timeEntries", "time_entry", guid, params=timerange_params)
+            yield from process_labor(base_url, headers, "/labor/v1/timeEntries", "time_entry", guid, params=modified_params)
 
         # Save the progress by checkpointing the state. This is important for ensuring that the sync process can resume
         # from the correct position in case of interruptions.
+        # checkpointing every 30 days for convenience,
+        # since we can only ask for 30 days of shifts and time entries at a time
         yield op.checkpoint(state)
-        first_pass = False
-
-        # testing only
-        # more_data = False
 
         # Determine if we should continue pagination based on the total items and the current offset.
         if ts_to < start_timestamp:
@@ -170,28 +193,18 @@ def process_config(base_url, headers, endpoint, table_name, rst_guid, timerange)
             next_token = None
             param_string = "&".join(f"{key}={value}" for key, value in timerange.items())
             response_page, next_token = get_api_response(base_url + endpoint + "?" + param_string, headers, params=pagination)
-            #response_page, next_token = get_api_response(base_url + endpoint, headers, params=pagination, data=data)
+
             log.fine(f"restaurant {rst_guid}: response_page has {len(response_page)} items for {endpoint}")
             for o in response_page:
                 o = stringify_lists(o)
-                """
-                if "deleted" in o and "guid" in o:
-                    if o["deleted"]:
-                        # log.fine(f"deleted record for {table_name}, {o}")
-                        yield op.delete(table=table_name, keys={"guid": o["guid"]})
-                    else:
-                        yield op.upsert(table=table_name, data=o)
-                else:
-                    yield op.upsert(table=table_name, data=o)
-                """
-                o["restaurant_id"] = rst_guid
+                o["restaurant_guid"] = rst_guid
                 yield op.upsert(table=table_name, data=o)
 
             if next_token:
                 pagination["pageToken"] = next_token
-                log.fine(f"restaurant {rst_guid}: getting more {endpoint} with {pagination}")
+                #log.fine(f"restaurant {rst_guid}: getting more {endpoint} with {pagination}")
             else:
-                log.fine(f"restaurant {rst_guid}: last page reached for {endpoint}")
+                #log.fine(f"restaurant {rst_guid}: last page reached for {endpoint}")
                 more_data = False
 
         except Exception as e:
@@ -211,15 +224,24 @@ def process_labor(base_url, headers, endpoint, table_name, rst_guid, params=None
     headers["Toast-Restaurant-External-ID"] = rst_guid
 
     try:
-        param_string = "&".join(f"{key}={value}" for key, value in params.items())
-        response_page, next_token = get_api_response(base_url + endpoint + "?" + param_string, headers)
+        response_page, next_token = get_api_response(base_url + endpoint, headers, params=params)
         log.fine(f"restaurant {rst_guid}: response_page has {len(response_page)} items for {endpoint}")
         for o in response_page:
+            # just call process_child with some changes? This is really ugly
             if endpoint == "/labor/v1/timeEntries" and "breaks" in o and len(o["breaks"]) > 0:
-                yield from process_child(o["breaks"], "break", "time_entry_id", o["guid"])
+                yield from process_child(o["breaks"], "break", "time_entry_guid", o["guid"])
+            if endpoint == "/labor/v1/employees":
+                if "jobReferences" in o and len(o["jobReferences"]) > 0:
+                    yield from process_child(o["jobReferences"], "employee_job_reference", "employee_guid", o["guid"])
+                if "wageOverrides" in o and len(o["wageOverrides"]) > 0:
+                    yield from process_child(o["wageOverrides"], "employee_wage_override", "employee_guid", o["guid"])
+            if endpoint == "/labor/v1/shifts":
+                o = flatten_fields(["scheduleConfig"], o)
             o = stringify_lists(o)
-            o["restaurant_id"] = rst_guid
+            o["restaurant_guid"] = rst_guid
             yield op.upsert(table=table_name, data=o)
+            if "deleted" in o and "guid" in o and o["deleted"]:
+                yield op.delete(table=table_name, keys={"guid": o["guid"]})
 
     except Exception as e:
         # Return error response
@@ -232,30 +254,54 @@ def process_labor(base_url, headers, endpoint, table_name, rst_guid, params=None
 # uses timerange_params and fixed-size pagination
 def process_orders(base_url, headers, endpoint, table_name, rst_guid, params):
     headers["Toast-Restaurant-External-ID"] = rst_guid
-    params_copy = copy.deepcopy(params)
-    params_copy["pageSize"] = 100
-    params_copy["page"] = 1
+
+    params["pageSize"] = 100
+    params["page"] = 1
+    fields_to_flatten = ["server", "createdDevice", "lastModifiedDevice"]
+    fields_extract_guids = ["diningOption", "table", "serviceArea", "revenueCenter"]
     more_pages = True
 
     try:
         while more_pages:
-            param_string = "&".join(f"{key}={value}" for key, value in params_copy.items())
-            response_page, next_token = get_api_response(base_url + endpoint + "?" + param_string, headers)
+            response_page, next_token = get_api_response(base_url + endpoint, headers, params=params)
             log.fine(f"restaurant {rst_guid}: response_page has {len(response_page)} items for {endpoint}")
             for o in response_page:
                 if len(o["checks"]) > 0:
-                    yield from process_child(o["checks"], "orders_check", "orders_id", o["guid"])
-                if len(o["pricingFeatures"]) > 0:
-                    yield from process_child(o["pricingFeatures"], "orders_pricing_feature", "orders_id", o["guid"])
-                if len(o["marketplaceFacilitatorTaxInfo"]) > 0:
-                    yield from process_child(o["marketplaceFacilitatorTaxInfo"], "orders_marketplace_facilitator_tax_info", "orders_id", o["guid"])
-                # will need to pop fields that are getting their own table
+                    for c in o["checks"]:
+                        # break out into separate function
+                        if "payments" in c:
+                            for payment in c["payments"]:
+                                orders_check_payment = {"orders_check_guid": c["guid"],
+                                                        "payment_guid": payment["guid"],
+                                                        "orders_guid": o["guid"]}
+                                yield op.upsert(table="orders_check_payment", data=orders_check_payment)
+                                yield op.upsert(table="payment", data=payment)
+                    yield from process_child(o["checks"], "orders_check", "orders_guid", o["guid"])
+
                 #o.pop("checks")
+                # pricingFeatures is a list of strings, not a list of dicts, needs special handling
+                # make this its own function
+                if len(o["pricingFeatures"]) > 0:
+                    for p in o["pricingFeatures"]:
+                        pricing_feature = {"orders_guid": o["guid"], "pricing_feature": p}
+                        #log.fine(f"upserting {pricing_feature}")
+                        yield op.upsert(table="orders_pricing_feature", data=pricing_feature)
+                o.pop("pricingFeatures")
+                o = flatten_fields(fields_to_flatten, o)
+                for field in fields_extract_guids:
+                    if field in o and o[field] and "guid" in o[field]:
+                        #log.fine(f"processing {field}")
+                        o[field + "_guid"] = o[field]["guid"]
+                        o.pop(field, "Not Found")
+
                 o = stringify_lists(o)
-                o["restaurant_id"] = rst_guid
+                o["restaurant_guid"] = rst_guid
                 yield op.upsert(table=table_name, data=o)
-            if len(response_page) == params_copy["pageSize"]:
-                params_copy["page"] = params_copy["page"] + 1
+                if "deleted" in o and "guid" in o and o["deleted"]:
+                    yield op.delete(table=table_name, keys={"guid": o["guid"]})
+
+            if len(response_page) == params["pageSize"]:
+                params["page"] = params["page"] + 1
             else:
                 more_pages = False
 
@@ -266,10 +312,74 @@ def process_orders(base_url, headers, endpoint, table_name, rst_guid, params):
         detailed_message = f"Error Message: {exception_message}\nStack Trace:\n{stack_trace}"
         raise RuntimeError(detailed_message)
 
+def process_cash(base_url, headers, endpoint, table_name, rst_guid, params):
+    headers["Toast-Restaurant-External-ID"] = rst_guid
+    fields_to_flatten = ["employee1", "employee2", "payoutReason", "noSaleReason",
+                         "approver", "cashDrawer", "employee", "creator"]
+    #fields_extract_guids = ["diningOption", "table", "serviceArea", "revenueCenter"]
+    try:
+        date_range = generate_business_dates(params["startDate"], params["endDate"])
+
+        for d in date_range:
+            response_page, next_token = get_api_response(base_url + endpoint + "?businessDate=" + d, headers)
+            #log.fine(f"restaurant {rst_guid}: response_page has {len(response_page)} items for {endpoint}")
+            for o in response_page:
+                o = flatten_fields(fields_to_flatten, o)
+                o["restaurant_guid"] = rst_guid
+                yield op.upsert(table=table_name, data=o)
+
+    except Exception as e:
+        # Return error response
+        exception_message = str(e)
+        stack_trace = traceback.format_exc()
+        detailed_message = f"Error Message: {exception_message}\nStack Trace:\n{stack_trace}"
+        raise RuntimeError(detailed_message)
+
 def process_child (parent, table_name, id_field_name, id_field):
+    relationships = {"orders_check": [
+            ("selections", "orders_check_selection"),
+            ("appliedDiscounts", "orders_check_applied_discount"),
+            ("appliedServiceCharges", "orders_check_applied_service_charge")],
+        "orders_check_applied_discount": [
+            ("comboItems", "orders_check_applied_discount_combo_item"),
+            ("triggers", "orders_check_applied_discount_trigger")],
+        "orders_check_applied_service_charge": [
+            ("appliedTax", "orders_check_applied_service_charge_applied_tax")],
+        "orders_check_selection": [
+            #"appliedTaxes" occasionally contains null guids, how to handle?
+            #("appliedTaxes", "orders_check_selection_applied_tax"),
+            ("modifiers", "orders_check_selection_modifier"),
+            ("appliedDiscounts", "orders_check_selection_applied_discount")],
+        "orders_check_selection_applied_discount":
+            [("comboItems", "orders_check_selection_applied_discount_combo_item"),
+             ("triggers", "orders_check_selection_applied_discount_trigger")]
+                     }
+
+    fields_to_flatten = {
+        "break": ["breakType"],
+        "orders_check_applied_discount": ["approver", "discount"],
+        "orders_check_applied_discount_trigger": ["selection"],
+        "orders_check_selection": ["salesCategory", "itemGroup","item", "diningOption"],
+        "orders_check_selection_applied_discount": ["appliedDiscountReason"],
+        "orders_check_selection_modifier": ["voidReason", "optionGroup", "salesCategory"
+            , "item", "diningOption", "preModifier" ],
+        "orders_check_selection_applied_discount_trigger": ["selection"]}
+
     for p in parent:
-        log.fine(f"processing {table_name}")
+        #log.fine(f"processing {table_name}")
         p[id_field_name] = id_field
+        if table_name in relationships:
+            for child_key, child_table_name in relationships[table_name]:
+                if len(p.get(child_key, [])) > 0:  # Use .get() to handle missing keys gracefully
+                    yield from process_child(
+                        p[child_key],
+                        child_table_name,
+                        table_name + "_guid",
+                        p["guid"]
+                    )
+        if table_name in fields_to_flatten:
+            #log.fine(f"flattening fields in {table_name}")
+            p = flatten_fields(fields_to_flatten[table_name], p)
         p = stringify_lists(p)
         yield op.upsert(table=table_name, data=p)
 
@@ -300,29 +410,39 @@ def set_timeranges(state, configuration, start_timestamp):
 
     return to_ts, from_ts
 
-# The get_api_response function sends an HTTP GET request to the provided URL with the specified parameters.
-# It performs the following tasks:
-# 1. Logs the URL and query parameters used for the API call for debugging and tracking purposes.
-# 2. Makes the API request using the 'requests' library, passing the URL and parameters.
-# 3. Parses the JSON response from the API and returns it as a dictionary.
-#
-# The function takes two parameters:
-# - base_url: The URL to which the API request is made.
-# - params: A dictionary of query parameters to be included in the API request.
-#
-# Returns:
-# - response_page: A dictionary containing the parsed JSON response from the API.
+
+def generate_business_dates (start_ts, end_ts):
+    start_date = datetime.datetime.fromisoformat(start_ts)
+    end_date = datetime.datetime.fromisoformat(end_ts)
+    delta = end_date - start_date
+
+    date_list = []
+    for i in range(delta.days + 1):
+        date_list.append((start_date + datetime.timedelta(days=i)).strftime("%Y%m%d"))
+
+    return date_list
+
 def get_api_response(endpoint_path, headers, **kwargs):
-    # get response
-    timerange_data = copy.deepcopy(kwargs["data"]) if "data" in kwargs else {}
-    params_copy = copy.deepcopy(kwargs["params"]) if "params" in kwargs else {}
-    response = rq.get(endpoint_path, headers=headers, data=timerange_data, params=params_copy)
+    """
+    # The get_api_response function sends an HTTP GET request to the provided URL with the specified parameters.
+    # It performs the following tasks:
+    # 1. Logs the URL and query parameters used for the API call for debugging and tracking purposes.
+    # 2. Makes the API request using the 'requests' library, passing the URL and parameters.
+    # 3. Parses the JSON response from the API and returns it as a dictionary.
+    :param endpoint_path:
+    :param headers:
+    :param kwargs:
+    :return:
+    """
+    timerange_data = kwargs["data"] if "data" in kwargs else {}
+    params = copy.deepcopy(kwargs["params"]) if "params" in kwargs else {}
+    response = rq.get(endpoint_path, headers=headers, data=timerange_data, params=params)
 
     if response.status_code == 409:
         # recommended by Toast to retry without pageToken
-        params_copy.pop("pageToken")
+        params.pop("pageToken")
         log.info(f"received 409 error, retrying {endpoint_path} without pageToken")
-        response = rq.get(endpoint_path, headers=headers, data=params_copy)
+        response = rq.get(endpoint_path, headers=headers, data=params)
 
     if response.status_code == 400:
         log.info(response.json()["message"])
@@ -347,8 +467,25 @@ def stringify_lists(d):
             new_dict[key] = str(value)
         else:
             new_dict[key] = value
-
     return new_dict
+
+def flatten_dict (parent_row: dict, dict_field: dict, prefix: str):
+    if not dict_field:  # Quick exit for empty dictionaries
+        return parent_row
+
+    parent_row.update({f"{prefix}_{key}": value for key, value in dict_field.items()})
+    return parent_row
+
+def flatten_fields(fields: list, row: dict):
+    row = {**row}  # Ensures row modifications don't affect the original dictionary
+
+    for field in fields:
+        value = row.get(field)  # Avoids multiple dictionary lookups
+        if value is not None:
+            row = flatten_dict(row, value, field)
+        row.pop(field, None)  # Remove the field in a single step
+
+    return row
 
 def is_older_than_30_days(date_to_check):
 
