@@ -24,7 +24,6 @@ from fivetran_connector_sdk import Logging as log # For enabling Logs in your co
 def schema(configuration: dict):
 
     return [
-
         {"table": "restaurant","primary_key": ["restaurantGuid"]},
         # labor tables
         {"table": "job", "primary_key": ["guid"]},
@@ -64,7 +63,6 @@ def schema(configuration: dict):
         {"table": "orders_check_selection_modifier", "primary_key":["guid", "orders_check_selection_guid"]},
         {"table": "orders_pricing_feature", "primary_key":["orders_guid"]},
         {"table": "payment", "primary_key": ["guid"]}
-
     ]
 
 # Define the update function, which is a required function, and is called by Fivetran during each sync.
@@ -195,6 +193,7 @@ def process_config(base_url, headers, endpoint, table_name, rst_guid, timerange)
             next_token = None
             param_string = "&".join(f"{key}={value}" for key, value in timerange.items())
             response_page, next_token = get_api_response(base_url + endpoint + "?" + param_string, headers, params=pagination)
+
             log.fine(f"restaurant {rst_guid}: response_page has {len(response_page)} items for {endpoint}")
             for o in response_page:
                 o = stringify_lists(o)
@@ -255,7 +254,7 @@ def process_labor(base_url, headers, endpoint, table_name, rst_guid, params=None
 # uses timerange_params and fixed-size pagination
 def process_orders(base_url, headers, endpoint, table_name, rst_guid, params):
     headers["Toast-Restaurant-External-ID"] = rst_guid
-    #params = copy.deepcopy(params)
+
     params["pageSize"] = 100
     params["page"] = 1
     fields_to_flatten = ["server", "createdDevice", "lastModifiedDevice"]
@@ -410,6 +409,7 @@ def set_timeranges(state, configuration, start_timestamp):
         to_ts = start_timestamp
 
     return to_ts, from_ts
+
 
 def generate_business_dates (start_ts, end_ts):
     start_date = datetime.datetime.fromisoformat(start_ts)
