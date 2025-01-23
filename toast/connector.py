@@ -24,18 +24,37 @@ from fivetran_connector_sdk import Logging as log # For enabling Logs in your co
 def schema(configuration: dict):
 
     return [
+
         {"table": "restaurant","primary_key": ["restaurantGuid"]},
         # labor tables
-        {"table": "job", "primary_key": ["guid"]},
-        {"table": "shift", "primary_key": ["guid"]},
-        {"table": "employee", "primary_key": ["guid"]},
+        {"table": "job", "primary_key": ["guid"],
+            "columns": {"CREATED_DATE": "UTC_DATETIME",
+                        "DELETED_DATE": "UTC_DATETIME",
+                        "MODIFIED_DATE": "UTC_DATETIME"}},
+        {"table": "shift", "primary_key": ["guid"],
+            "columns": {"CREATED_DATE": "UTC_DATETIME",
+                        "IN_DATE": "UTC_DATETIME",
+                        "MODIFIED_DATE": "UTC_DATETIME",
+                        "OUT_DATE": "UTC_DATETIME"}},
+        {"table": "employee", "primary_key": ["guid"],
+            "columns": {"CREATED_DATE": "UTC_DATETIME",
+                        "DELETED_DATE": "UTC_DATETIME",
+                        "MODIFIED_DATE": "UTC_DATETIME"}},
         {"table": "employee_job_reference", "primary_key": ["guid", "employee_guid"]},
         #{"table": "employee_wage_override", "primary_key": ["guid"]},
-        {"table": "time_entry", "primary_key": ["guid"]},
-        {"table": "break", "primary_key": ["guid"]},
+        {"table": "time_entry", "primary_key": ["guid"],
+            "columns": {"CREATED_DATE": "UTC_DATETIME",
+                        "DELETED_DATE": "UTC_DATETIME",
+                        "IN_DATE": "UTC_DATETIME",
+                        "MODIFIED_DATE": "UTC_DATETIME",
+                        "OUT_DATE": "UTC_DATETIME"}},
+        {"table": "break", "primary_key": ["guid"],
+            "columns": {"IN_DATE": "UTC_DATETIME", "OUT_DATE": "UTC_DATETIME"}},
         # cash tables
-        {"table": "cash_deposit", "primary_key": ["guid"]},
-        {"table": "cash_entry", "primary_key": ["guid"]},
+        {"table": "cash_deposit", "primary_key": ["guid"],
+            "columns": {"DATE": "UTC_DATETIME"}},
+        {"table": "cash_entry", "primary_key": ["guid"],
+            "columns": {"DATE": "UTC_DATETIME"}},
         # config tables
         {"table": "alternate_payment_types", "primary_key": ["guid"]},
         {"table": "dining_option", "primary_key": ["guid"]},
@@ -49,20 +68,43 @@ def schema(configuration: dict):
         {"table": "service_area", "primary_key": ["guid"]},
         {"table": "tables", "primary_key": ["guid"]},
         # orders tables
-        {"table": "orders", "primary_key":["guid"]},
-        {"table": "orders_check", "primary_key":["guid"]},
+        {"table": "orders", "primary_key":["guid"],
+            "columns": {"CLOSED_DATE": "UTC_DATETIME",
+                        "CREATED_DATE": "UTC_DATETIME",
+                        "DELETED_DATE": "UTC_DATETIME",
+                        "ESTIMATED_FULFILLMENT_DATE": "UTC_DATETIME",
+                        "MODIFIED_DATE": "UTC_DATETIME",
+                        "OPENED_DATE": "UTC_DATETIME",
+                        "PAID_DATE": "UTC_DATETIME",
+                        "PROMISED_DATE": "UTC_DATETIME",
+                        "VOID_DATE": "UTC_DATETIME"}},
+        {"table": "orders_check", "primary_key":["guid"],
+            "columns": {"CLOSED_DATE": "UTC_DATETIME",
+                        "CREATED_DATE": "UTC_DATETIME",
+                        "DELETED_DATE": "UTC_DATETIME",
+                        "MODIFIED_DATE": "UTC_DATETIME",
+                        "OPENED_DATE": "UTC_DATETIME",
+                        "PAID_DATE": "UTC_DATETIME",
+                        "VOID_DATE": "UTC_DATETIME"}},
         {"table": "orders_check_applied_discount", "primary_key":["guid"]},
         {"table": "orders_check_applied_discount_combo_item", "primary_key":["guid"]},
         #{"table": "orders_check_applied_discount_trigger", "primary_key": ["guid"]},
         {"table": "orders_check_applied_service_charge", "primary_key":["guid", "orders_check_guid"]},
         {"table": "orders_check_payment", "primary_key": ["orders_check_guid", "payment_guid", "orders_guid"]},
-        {"table": "orders_check_selection", "primary_key":["guid", "orders_check_guid"]},
+        {"table": "orders_check_selection", "primary_key":["guid", "orders_check_guid"],
+            "columns": {"CREATED_DATE": "UTC_DATETIME",
+                        "MODIFIED_DATE": "UTC_DATETIME",
+                        "VOID_DATE": "UTC_DATETIME"}},
         #{"table": "orders_check_selection_applied_discount", "primary_key": ["guid"]},
         #{"table": "orders_check_selection_applied_discount_trigger", "primary_key": ["guid"]},
         {"table": "orders_check_selection_applied_tax", "primary_key":["guid", "orders_check_selection_guid"]},
-        {"table": "orders_check_selection_modifier", "primary_key":["guid", "orders_check_selection_guid"]},
+        {"table": "orders_check_selection_modifier", "primary_key":["guid", "orders_check_selection_guid"],
+             "columns": {"CREATED_DATE": "UTC_DATETIME",
+                         "MODIFIED_DATE": "UTC_DATETIME",
+                         "VOID_DATE": "UTC_DATETIME"}},
         {"table": "orders_pricing_feature", "primary_key":["orders_guid"]},
-        {"table": "payment", "primary_key": ["guid"]}
+        {"table": "payment", "primary_key": ["guid"], "columns": {"PAID_DATE": "UTC_DATETIME"}}
+
     ]
 
 # Define the update function, which is a required function, and is called by Fivetran during each sync.
@@ -193,7 +235,6 @@ def process_config(base_url, headers, endpoint, table_name, rst_guid, timerange)
             next_token = None
             param_string = "&".join(f"{key}={value}" for key, value in timerange.items())
             response_page, next_token = get_api_response(base_url + endpoint + "?" + param_string, headers, params=pagination)
-
             log.fine(f"restaurant {rst_guid}: response_page has {len(response_page)} items for {endpoint}")
             for o in response_page:
                 o = stringify_lists(o)
@@ -253,57 +294,45 @@ def process_labor(base_url, headers, endpoint, table_name, rst_guid, params=None
 # for processing orders
 # uses timerange_params and fixed-size pagination
 def process_orders(base_url, headers, endpoint, table_name, rst_guid, params):
-    headers["Toast-Restaurant-External-ID"] = rst_guid
+    """Processes orders from an API response, flattening fields and handling payments."""
 
-    params["pageSize"] = 100
-    params["page"] = 1
+    headers["Toast-Restaurant-External-ID"] = rst_guid  # Move outside loop for efficiency
+    params = params.copy()  # Avoid modifying original params
+    params.update({"pageSize": 100, "page": 1})  # Set pagination defaults
+
     fields_to_flatten = ["server", "createdDevice", "lastModifiedDevice"]
     fields_extract_guids = ["diningOption", "table", "serviceArea", "revenueCenter"]
-    more_pages = True
 
     try:
-        while more_pages:
+        for page_num in range(1, 1_000_000):  # Prevent infinite loops; max reasonable pages
+            params["page"] = page_num
             response_page, next_token = get_api_response(base_url + endpoint, headers, params=params)
             log.fine(f"restaurant {rst_guid}: response_page has {len(response_page)} items for {endpoint}")
-            for o in response_page:
-                if len(o["checks"]) > 0:
-                    for c in o["checks"]:
-                        # break out into separate function
-                        if "payments" in c:
-                            for payment in c["payments"]:
-                                orders_check_payment = {"orders_check_guid": c["guid"],
-                                                        "payment_guid": payment["guid"],
-                                                        "orders_guid": o["guid"]}
-                                yield op.upsert(table="orders_check_payment", data=orders_check_payment)
-                                yield op.upsert(table="payment", data=payment)
-                    yield from process_child(o["checks"], "orders_check", "orders_guid", o["guid"])
 
-                #o.pop("checks")
-                # pricingFeatures is a list of strings, not a list of dicts, needs special handling
-                # make this its own function
-                if len(o["pricingFeatures"]) > 0:
-                    for p in o["pricingFeatures"]:
-                        pricing_feature = {"orders_guid": o["guid"], "pricing_feature": p}
-                        #log.fine(f"upserting {pricing_feature}")
-                        yield op.upsert(table="orders_pricing_feature", data=pricing_feature)
-                o.pop("pricingFeatures")
-                o = flatten_fields(fields_to_flatten, o)
+            if not response_page:
+                break  # No more data
+
+            for order in response_page:
+                order["restaurant_guid"] = rst_guid
+                process_payments(order)
+                process_pricing_features(order)
+
+                order = flatten_fields(fields_to_flatten, order)
+
                 for field in fields_extract_guids:
-                    if field in o and o[field] and "guid" in o[field]:
-                        #log.fine(f"processing {field}")
-                        o[field + "_guid"] = o[field]["guid"]
-                        o.pop(field, "Not Found")
+                    if order.get(field) and "guid" in order[field]:
+                        order[f"{field}_guid"] = order[field]["guid"]
+                        order.pop(field, None)
 
-                o = stringify_lists(o)
-                o["restaurant_guid"] = rst_guid
-                yield op.upsert(table=table_name, data=o)
-                if "deleted" in o and "guid" in o and o["deleted"]:
-                    yield op.delete(table=table_name, keys={"guid": o["guid"]})
+                order = stringify_lists(order)
 
-            if len(response_page) == params["pageSize"]:
-                params["page"] = params["page"] + 1
-            else:
-                more_pages = False
+                yield op.upsert(table=table_name, data=order)
+
+                if order.get("deleted") and "guid" in order:
+                    yield op.delete(table=table_name, keys={"guid": order["guid"]})
+
+            if len(response_page) < params["pageSize"]:
+                break  # No more pages available
 
     except Exception as e:
         # Return error response
@@ -311,6 +340,31 @@ def process_orders(base_url, headers, endpoint, table_name, rst_guid, params):
         stack_trace = traceback.format_exc()
         detailed_message = f"Error Message: {exception_message}\nStack Trace:\n{stack_trace}"
         raise RuntimeError(detailed_message)
+
+def process_payments(order):
+    """Processes payment information for an order."""
+    if "checks" in order and order["checks"]:
+        for check in order["checks"]:
+            if "payments" in check:
+                for payment in check["payments"]:
+                    yield op.upsert(
+                        table="orders_check_payment",
+                        data={"orders_check_guid": check["guid"],
+                              "payment_guid": payment["guid"],
+                              "orders_guid": order["guid"]}
+                    )
+                    yield op.upsert(table="payment", data=payment)
+        yield from process_child(order["checks"], "orders_check", "orders_guid", order["guid"])
+
+def process_pricing_features(order):
+    """Processes pricing features for an order."""
+    if "pricingFeatures" in order and order["pricingFeatures"]:
+        for feature in order["pricingFeatures"]:
+            yield op.upsert(
+                table="orders_pricing_feature",
+                data={"orders_guid": order["guid"], "pricing_feature": feature}
+            )
+        order.pop("pricingFeatures", None)  # Remove processed field
 
 def process_cash(base_url, headers, endpoint, table_name, rst_guid, params):
     headers["Toast-Restaurant-External-ID"] = rst_guid
@@ -409,7 +463,6 @@ def set_timeranges(state, configuration, start_timestamp):
         to_ts = start_timestamp
 
     return to_ts, from_ts
-
 
 def generate_business_dates (start_ts, end_ts):
     start_date = datetime.datetime.fromisoformat(start_ts)
