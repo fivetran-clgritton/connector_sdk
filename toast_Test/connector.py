@@ -15,7 +15,6 @@ from fivetran_connector_sdk import Operations as op # For supporting Data operat
 from fivetran_connector_sdk import Logging as log # For enabling Logs in your connector code
 
 
-
 # Define the schema function which lets you configure the schema your connector delivers.
 # See the technical reference documentation for more details on the schema function:
 # https://fivetran.com/docs/connectors/connector-sdk/technical-reference#schema
@@ -84,6 +83,7 @@ def update(configuration: dict, state: dict):
         # Yield a checkpoint operation to save the new state.
         yield from sync_items(base_url, headers, from_ts, to_ts, start_timestamp)
 
+
     except Exception as e:
         # Return error response
         exception_message = str(e)
@@ -122,6 +122,7 @@ def sync_items(base_url, headers, ts_from, ts_to, start_timestamp):
 
         # Get response from API call.
         response_page, next_token = get_api_response(base_url+"/partners/v1/restaurants", headers)
+
 
         # Process the items.
         if not response_page:
@@ -390,6 +391,7 @@ def get_api_response(endpoint_path, headers, **kwargs):
     if response.status_code == 400:
         log.info(response.json()["message"])
 
+
     response.raise_for_status()  # Ensure we raise an exception for HTTP errors.
     response_page = response.json()
     response_headers = response.headers
@@ -423,6 +425,7 @@ def is_older_than_30_days(date_to_check):
     today = datetime.date.today()
     thirty_days_ago = str(today - datetime.timedelta(days=30))
     return date_to_check < thirty_days_ago
+
 
 # This creates the connector object that will use the update function defined in this connector.py file.
 connector = Connector(update=update, schema=schema)
