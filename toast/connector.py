@@ -30,38 +30,48 @@ def schema(configuration: dict):
         {"table": "job", "primary_key": ["guid"],
             "columns": {"createdDate": "UTC_DATETIME",
                         "deletedDate": "UTC_DATETIME",
-                        "MODIFIEDDATE": "UTC_DATETIME"}},
+                        "modifiedDate": "UTC_DATETIME",
+                        "deleted": "BOOLEAN",
+                        "excludedFromReporting": "BOOLEAN",
+                        "tipped": "BOOLEAN"}},
         {"table": "shift", "primary_key": ["guid"],
-            "columns": {"CREATEDDATE": "UTC_DATETIME",
-                        "INDATE": "UTC_DATETIME",
-                        "MODIFIEDDATE": "UTC_DATETIME",
-                        "OUTDATE": "UTC_DATETIME"}},
+            "columns": {"createdDate": "UTC_DATETIME",
+                        "inDate": "UTC_DATETIME",
+                        "modifiedDate": "UTC_DATETIME",
+                        "outDate": "UTC_DATETIME",
+                        "deleted": "BOOLEAN"}},
         {"table": "employee", "primary_key": ["guid"],
-            "columns": {"CREATEDDATE": "UTC_DATETIME",
-                        "DELETEDDATE": "UTC_DATETIME",
-                        "MODIFIEDDATE": "UTC_DATETIME"}},
+            "columns": {"createdDate": "UTC_DATETIME",
+                        "deletedDate": "UTC_DATETIME",
+                        "modifiedDate": "UTC_DATETIME", "deleted": "BOOLEAN"}},
         {"table": "employee_job_reference", "primary_key": ["guid", "employee_guid"]},
         #{"table": "employee_wage_override", "primary_key": ["guid"]},
         {"table": "time_entry", "primary_key": ["guid"],
-            "columns": {"CREATEDDATE": "UTC_DATETIME",
-                        "DELETEDDATE": "UTC_DATETIME",
-                        "INDATE": "UTC_DATETIME",
-                        "MODIFIEDDATE": "UTC_DATETIME",
-                        "OUTDATE": "UTC_DATETIME"}},
+            "columns": {"createdDate": "UTC_DATETIME",
+                        "deletedDate": "UTC_DATETIME",
+                        "inDate": "UTC_DATETIME",
+                        "modifiedDate": "UTC_DATETIME",
+                        "outDate": "UTC_DATETIME",
+                        "autoClockedOut": "BOOLEAN",
+                        "deleted": "BOOLEAN"}},
         {"table": "break", "primary_key": ["guid"],
-            "columns": {"INDATE": "UTC_DATETIME", "OUTDATE": "UTC_DATETIME"}},
+            "columns": {"inDate": "UTC_DATETIME", "outDate": "UTC_DATETIME",
+                        "auditResponse": "BOOLEAN",
+                        "missed": "BOOLEAN"}},
         # cash tables
         {"table": "cash_deposit", "primary_key": ["guid"],
-            "columns": {"DATE": "UTC_DATETIME"}},
+            "columns": {"date": "UTC_DATETIME"}},
         {"table": "cash_entry", "primary_key": ["guid"],
-            "columns": {"DATE": "UTC_DATETIME"}},
+            "columns": {"date": "UTC_DATETIME"}},
         # config tables
         {"table": "alternate_payment_types", "primary_key": ["guid"]},
-        {"table": "dining_option", "primary_key": ["guid"]},
-        {"table": "discounts", "primary_key": ["guid"]},
+        {"table": "dining_option", "primary_key": ["guid"], "columns": {"curbside": "BOOLEAN"}},
+        {"table": "discounts", "primary_key": ["guid"],
+            "columns":{"active": "BOOLEAN", "nonExclusive": "BOOLEAN"}},
         {"table": "menu", "primary_key": ["guid"]},
         {"table": "menu_group", "primary_key": ["guid"]},
-        {"table": "menu_item", "primary_key": ["guid"]},
+        {"table": "menu_item", "primary_key": ["guid"],
+            "columns": {"inheritOptionGroups": "BOOLEAN", "inheritUnitOfMeasure": "BOOLEAN"}},
         {"table": "restaurant_service", "primary_key": ["guid"]},
         {"table": "revenue_center", "primary_key": ["guid"]},
         {"table": "sale_category", "primary_key": ["guid"]},
@@ -69,41 +79,56 @@ def schema(configuration: dict):
         {"table": "tables", "primary_key": ["guid"]},
         # orders tables
         {"table": "orders", "primary_key":["guid"],
-            "columns": {"CLOSEDDATE": "UTC_DATETIME",
-                        "CREATEDDATE": "UTC_DATETIME",
-                        "DELETEDDATE": "UTC_DATETIME",
-                        "ESTIMATEDFULFILLMENTDATE": "UTC_DATETIME",
-                        "MODIFIEDDATE": "UTC_DATETIME",
-                        "OPENEDDATE": "UTC_DATETIME",
-                        "PAIDDATE": "UTC_DATETIME",
-                        "PROMISEDDATE": "UTC_DATETIME",
-                        "VOIDDATE": "UTC_DATETIME"}},
+            "columns": {"closedDate": "UTC_DATETIME",
+                        "createdDate": "UTC_DATETIME",
+                        "deletedDate": "UTC_DATETIME",
+                        "estimatedFulfillmentDate": "UTC_DATETIME",
+                        "modifiedDate": "UTC_DATETIME",
+                        "openedDate": "UTC_DATETIME",
+                        "paidDate": "UTC_DATETIME",
+                        "promisedDate": "UTC_DATETIME",
+                        "voidDate": "UTC_DATETIME",
+                        "createdInTestMode": "BOOLEAN",
+                        "deleted": "BOOLEAN",
+                        "excessFood": "BOOLEAN",
+                        "voided": "BOOLEAN"}},
         {"table": "orders_check", "primary_key":["guid"],
-            "columns": {"CLOSEDDATE": "UTC_DATETIME",
-                        "CREATEDDATE": "UTC_DATETIME",
-                        "DELETEDDATE": "UTC_DATETIME",
-                        "MODIFIEDDATE": "UTC_DATETIME",
-                        "OPENEDDATE": "UTC_DATETIME",
-                        "PAIDDATE": "UTC_DATETIME",
-                        "VOIDDATE": "UTC_DATETIME"}},
+            "columns": {"closedDate": "UTC_DATETIME",
+                        "createdDate": "UTC_DATETIME",
+                        "deletedDate": "UTC_DATETIME",
+                        "modifiedDate": "UTC_DATETIME",
+                        "openedDate": "UTC_DATETIME",
+                        "paidDate": "UTC_DATETIME",
+                        "voidDate": "UTC_DATETIME",
+                        "deleted": "BOOLEAN",
+                        "taxExempt": "BOOLEAN",
+                        "voided": "BOOLEAN"}},
         {"table": "orders_check_applied_discount", "primary_key":["guid"]},
         {"table": "orders_check_applied_discount_combo_item", "primary_key":["guid"]},
         #{"table": "orders_check_applied_discount_trigger", "primary_key": ["guid"]},
-        {"table": "orders_check_applied_service_charge", "primary_key":["guid", "orders_check_guid"]},
+        {"table": "orders_check_applied_service_charge", "primary_key":["guid", "orders_check_guid"],
+         "columns": {"delivery": "BOOLEAN",
+                    "dineIn": "BOOLEAN",
+                    "gratuity": "BOOLEAN",
+                    "takeout": "BOOLEAN",
+                    "taxable": "BOOLEAN"}},
         {"table": "orders_check_payment", "primary_key": ["orders_check_guid", "payment_guid", "orders_guid"]},
         {"table": "orders_check_selection", "primary_key":["guid", "orders_check_guid"],
-            "columns": {"CREATEDDATE": "UTC_DATETIME",
-                        "MODIFIEDDATE": "UTC_DATETIME",
-                        "VOIDDATE": "UTC_DATETIME"}},
+            "columns": {"createdDate": "UTC_DATETIME",
+                        "modifiedDate": "UTC_DATETIME",
+                        "voidDate": "UTC_DATETIME",
+                        "deferred": "BOOLEAN",
+                        "voided": "BOOLEAN"}},
         #{"table": "orders_check_selection_applied_discount", "primary_key": ["guid"]},
         #{"table": "orders_check_selection_applied_discount_trigger", "primary_key": ["guid"]},
         {"table": "orders_check_selection_applied_tax", "primary_key":["guid", "orders_check_selection_guid"]},
         {"table": "orders_check_selection_modifier", "primary_key":["guid", "orders_check_selection_guid"],
-             "columns": {"CREATEDDATE": "UTC_DATETIME",
-                        "MODIFIEDDATE": "UTC_DATETIME",
-                        "VOIDDATE": "UTC_DATETIME"}},
+             "columns": {"createdDate": "UTC_DATETIME",
+                        "modifiedDate": "UTC_DATETIME",
+                        "voidDate": "UTC_DATETIME",
+                         "deferred": "BOOLEAN"}},
         {"table": "orders_pricing_feature", "primary_key":["orders_guid"]},
-        {"table": "payment", "primary_key": ["guid"], "columns": {"PAIDDATE": "UTC_DATETIME"}}
+        {"table": "payment", "primary_key": ["guid"], "columns": {"paidDate": "UTC_DATETIME"}}
     ]
 
 # Define the update function, which is a required function, and is called by Fivetran during each sync.
@@ -165,8 +190,6 @@ def sync_items(base_url, headers, ts_from, ts_to, start_timestamp):
         modified_params = {"modifiedStartDate": ts_from, "modifiedEndDate": ts_to}
         config_params = {"lastModified": ts_from}
         state = {"to_ts": ts_to}
-        #log.fine(f"timerange_params: {timerange_params}")
-        #log.fine(f"config_params: {config_params}")
         log.fine(f"state updated, new state: {repr(state)}")
 
         # Get response from API call.
@@ -228,6 +251,10 @@ def process_config(base_url, headers, endpoint, table_name, rst_guid, timerange)
     headers["Toast-Restaurant-External-ID"] = rst_guid
     more_data = True
     pagination = {}
+    fields_to_extract = {"menu_group": [("menu", "guid", "menu_guid")],
+                         "service_area": [("revenueCenter", "guid", "revenue_center_guid")],
+                         "tables": [("revenueCenter", "guid", "revenue_center_guid"),
+                                    ("serviceArea", "guid", "service_area_guid")]}
 
     while more_data:
         try:
@@ -236,6 +263,8 @@ def process_config(base_url, headers, endpoint, table_name, rst_guid, timerange)
             response_page, next_token = get_api_response(base_url + endpoint + "?" + param_string, headers, params=pagination)
             log.fine(f"restaurant {rst_guid}: response_page has {len(response_page)} items for {endpoint}")
             for o in response_page:
+                if fields_to_extract.get(table_name):
+                    o = extract_fields(fields_to_extract[table_name], o)
                 o = stringify_lists(o)
                 o["restaurant_guid"] = rst_guid
                 yield op.upsert(table=table_name, data=o)
@@ -262,6 +291,11 @@ def process_labor(base_url, headers, endpoint, table_name, rst_guid, params=None
     if params is None:
         params = {}
     headers["Toast-Restaurant-External-ID"] = rst_guid
+    fields_to_extract = {"shift": [("employeeReference", "guid", "employee_reference_guid"),
+                                   ("jobReference", "guid", "job_reference_guid")],
+                         "time_entry":[("employeeReference", "guid", "employee_reference_guid"),
+                                       ("jobReference", "guid", "job_reference_guid"),
+                                       ("shiftReference", "guid", "shift_reference_guid")]}
 
     try:
         response_page, next_token = get_api_response(base_url + endpoint, headers, params=params)
@@ -277,6 +311,8 @@ def process_labor(base_url, headers, endpoint, table_name, rst_guid, params=None
                     yield from process_child(o["wageOverrides"], "employee_wage_override", "employee_guid", o["guid"])
             if endpoint == "/labor/v1/shifts":
                 o = flatten_fields(["scheduleConfig"], o)
+            if fields_to_extract.get(table_name):
+                o = extract_fields(fields_to_extract[table_name], o)
             o = stringify_lists(o)
             o["restaurant_guid"] = rst_guid
             yield op.upsert(table=table_name, data=o)
@@ -313,8 +349,8 @@ def process_orders(base_url, headers, endpoint, table_name, rst_guid, params):
 
             for order in response_page:
                 order["restaurant_guid"] = rst_guid
-                process_payments(order)
-                process_pricing_features(order)
+                yield from process_payments(order)
+                yield from process_pricing_features(order)
 
                 order = flatten_fields(fields_to_flatten, order)
 
@@ -342,7 +378,10 @@ def process_orders(base_url, headers, endpoint, table_name, rst_guid, params):
 
 def process_payments(order):
     """Processes payment information for an order."""
+
+    fields_to_flatten = ["cashDrawer", "createdDevice", "otherPayment", "refund", "server"]
     if "checks" in order and order["checks"]:
+        yield from process_child(order["checks"], "orders_check", "orders_guid", order["guid"])
         for check in order["checks"]:
             if "payments" in check:
                 for payment in check["payments"]:
@@ -352,8 +391,10 @@ def process_payments(order):
                               "payment_guid": payment["guid"],
                               "orders_guid": order["guid"]}
                     )
+                    payment = flatten_fields(fields_to_flatten, payment)
+                    payment["restaurant_guid"] = order["restaurant_guid"]
+                    process_void_info(payment)
                     yield op.upsert(table="payment", data=payment)
-        yield from process_child(order["checks"], "orders_check", "orders_guid", order["guid"])
 
 def process_pricing_features(order):
     """Processes pricing features for an order."""
@@ -367,9 +408,10 @@ def process_pricing_features(order):
 
 def process_cash(base_url, headers, endpoint, table_name, rst_guid, params):
     headers["Toast-Restaurant-External-ID"] = rst_guid
-    fields_to_flatten = ["employee1", "employee2", "payoutReason", "noSaleReason",
-                         "approver", "cashDrawer", "employee", "creator"]
-    #fields_extract_guids = ["diningOption", "table", "serviceArea", "revenueCenter"]
+    fields_to_flatten = {
+        "cash_deposit": ["employee", "creator"],
+        "cash_entry": ["approverOrShiftReviewSubject", "creatorOrShiftReviewSubject", "cashDrawer",
+                       "employee1", "employee2", "payoutReason", "noSaleReason"]}
     try:
         date_range = generate_business_dates(params["startDate"], params["endDate"])
 
@@ -377,7 +419,7 @@ def process_cash(base_url, headers, endpoint, table_name, rst_guid, params):
             response_page, next_token = get_api_response(base_url + endpoint + "?businessDate=" + d, headers)
             #log.fine(f"restaurant {rst_guid}: response_page has {len(response_page)} items for {endpoint}")
             for o in response_page:
-                o = flatten_fields(fields_to_flatten, o)
+                o = flatten_fields(fields_to_flatten[table_name], o)
                 o["restaurant_guid"] = rst_guid
                 yield op.upsert(table=table_name, data=o)
 
@@ -389,6 +431,7 @@ def process_cash(base_url, headers, endpoint, table_name, rst_guid, params):
         raise RuntimeError(detailed_message)
 
 def process_child (parent, table_name, id_field_name, id_field):
+
     relationships = {"orders_check": [
             ("selections", "orders_check_selection"),
             ("appliedDiscounts", "orders_check_applied_discount"),
@@ -410,10 +453,12 @@ def process_child (parent, table_name, id_field_name, id_field):
 
     fields_to_flatten = {
         "break": ["breakType"],
-        "orders_check_applied_discount": ["approver", "discount"],
+        "orders_check": ["customer"],
+        "orders_check_applied_discount": ["approver", "discount", "appliedDiscountReason"],
         "orders_check_applied_discount_trigger": ["selection"],
-        "orders_check_selection": ["salesCategory", "itemGroup","item", "diningOption"],
-        "orders_check_selection_applied_discount": ["appliedDiscountReason"],
+        "orders_check_applied_service_charge": ["serviceCharge"],
+        "orders_check_selection": ["salesCategory", "itemGroup", "item", "diningOption", "voidReason"],
+        "orders_check_selection_applied_discount": ["approver", "appliedDiscountReason", "discount"],
         "orders_check_selection_modifier": ["voidReason", "optionGroup", "salesCategory"
             , "item", "diningOption", "preModifier" ],
         "orders_check_selection_applied_discount_trigger": ["selection"]}
@@ -430,11 +475,28 @@ def process_child (parent, table_name, id_field_name, id_field):
                         table_name + "_guid",
                         p["guid"]
                     )
+                p.pop(child_key, None)
         if table_name in fields_to_flatten:
             #log.fine(f"flattening fields in {table_name}")
             p = flatten_fields(fields_to_flatten[table_name], p)
         p = stringify_lists(p)
         yield op.upsert(table=table_name, data=p)
+
+def process_void_info(payment):
+    """
+    :return:
+    """
+    if payment.get("voidInfo"):
+        payment["void_info_approver_guid"] = payment["voidInfo"]["voidApprover"]["guid"]
+        payment["void_info_business_date"] = payment["voidInfo"]["voidBusinessDate"]
+        payment["void_info_date"] = payment["voidInfo"]["voidDate"]
+        if payment["voidInfo"].get("voidUser"):
+            payment["void_info_user_guid"] = payment["voidInfo"]["voidUser"]["guid"]
+        if payment["voidInfo"].get("voidReason"):
+            payment["void_info_reason_entity_type"] = payment["voidInfo"]["voidReason"]["entityType"]
+            payment["void_info_reason_guid"] = payment["voidInfo"]["voidReason"]["guid"]
+        payment.pop("voidInfo", None)
+
 
 def make_headers(conf, base_url):
     payload = {"clientId": conf["clientId"],
@@ -505,14 +567,12 @@ def get_api_response(endpoint_path, headers, **kwargs):
     next_page_token = response_headers["Toast-Next-Page-Token"] if "Toast-Next-Page-Token" in response_headers else None
     return response_page, next_page_token
 
-# The stringify_lists function changes lists to strings
-#
-# The function takes one parameter:
-# - d: a dictionary
-#
-# Returns:
-# - new_dict: A dictionary without any values that are lists
 def stringify_lists(d):
+    """
+    The stringify_lists function changes lists to strings
+    :param d: any dictionary
+    :return: the dictionary with lists represented as strings
+    """
     new_dict = {}
     for key, value in d.items():
         if isinstance(value, list):
@@ -522,6 +582,13 @@ def stringify_lists(d):
     return new_dict
 
 def flatten_dict (parent_row: dict, dict_field: dict, prefix: str):
+    """
+
+    :param parent_row: a dictionary containing a key whose value is a dictionary
+    :param dict_field: the key whose value is a dictionary
+    :param prefix: the prefix to add to the name of keys in dict_field to make new keys in parent_row
+    :return: parent_row with dict_field flattened into multiple fields
+    """
     if not dict_field:  # Quick exit for empty dictionaries
         return parent_row
 
@@ -536,6 +603,22 @@ def flatten_fields(fields: list, row: dict):
         if value is not None:
             row = flatten_dict(row, value, field)
         row.pop(field, None)  # Remove the field in a single step
+
+    return row
+
+def extract_fields(fields: list, row: dict):
+    """
+
+    :param fields:
+    :param row:
+    :return:
+    """
+    row = {**row}
+
+    for (field, sub_field, new_name) in fields:
+        if row.get(field) and sub_field in row[field]:
+            row[new_name] = row[field][sub_field]
+            row.pop(field, None)
 
     return row
 
