@@ -6,8 +6,11 @@
 import requests as rq
 import traceback
 import datetime
+import time
 import json
 import copy
+# uuid needed for generating guids for orders_check_selection_applied_tax
+import uuid
 
 # Import required classes from fivetran_connector_sdk
 from fivetran_connector_sdk import Connector # For supporting Connector operations like Update() and Schema()
@@ -25,14 +28,14 @@ def schema(configuration: dict):
 
     return [
 
-        {"table": "restaurant","primary_key": ["restaurantGuid"]},
+        {"table": "restaurant","primary_key": ["guid"]},
         # labor tables
         {"table": "job", "primary_key": ["guid"],
             "columns": {"createdDate": "UTC_DATETIME",
                         "deletedDate": "UTC_DATETIME",
                         "modifiedDate": "UTC_DATETIME",
                         "deleted": "BOOLEAN",
-                        "excludedFromReporting": "BOOLEAN",
+                        "excludeFromReporting": "BOOLEAN",
                         "tipped": "BOOLEAN"}},
         {"table": "shift", "primary_key": ["guid"],
             "columns": {"createdDate": "UTC_DATETIME",
@@ -45,7 +48,7 @@ def schema(configuration: dict):
                         "deletedDate": "UTC_DATETIME",
                         "modifiedDate": "UTC_DATETIME", "deleted": "BOOLEAN"}},
         {"table": "employee_job_reference", "primary_key": ["guid", "employee_guid"]},
-        #{"table": "employee_wage_override", "primary_key": ["guid"]},
+        {"table": "employee_wage_override", "primary_key": ["guid", "employee_guid"]},
         {"table": "time_entry", "primary_key": ["guid"],
             "columns": {"createdDate": "UTC_DATETIME",
                         "deletedDate": "UTC_DATETIME",
@@ -105,7 +108,7 @@ def schema(configuration: dict):
                         "voided": "BOOLEAN"}},
         {"table": "orders_check_applied_discount", "primary_key":["guid"]},
         {"table": "orders_check_applied_discount_combo_item", "primary_key":["guid"]},
-        #{"table": "orders_check_applied_discount_trigger", "primary_key": ["guid"]},
+        {"table": "orders_check_applied_discount_trigger", "primary_key": ["orders_check_applied_discount_guid"]},
         {"table": "orders_check_applied_service_charge", "primary_key":["guid", "orders_check_guid"],
          "columns": {"delivery": "BOOLEAN",
                     "dineIn": "BOOLEAN",
@@ -119,8 +122,8 @@ def schema(configuration: dict):
                         "voidDate": "UTC_DATETIME",
                         "deferred": "BOOLEAN",
                         "voided": "BOOLEAN"}},
-        #{"table": "orders_check_selection_applied_discount", "primary_key": ["guid"]},
-        #{"table": "orders_check_selection_applied_discount_trigger", "primary_key": ["guid"]},
+        {"table": "orders_check_selection_applied_discount", "primary_key": ["guid"]},
+        {"table": "orders_check_selection_applied_discount_trigger", "primary_key": ["orders_check_selection_applied_discount_guid"]},
         {"table": "orders_check_selection_applied_tax", "primary_key":["guid", "orders_check_selection_guid"]},
         {"table": "orders_check_selection_modifier", "primary_key":["guid", "orders_check_selection_guid"],
              "columns": {"createdDate": "UTC_DATETIME",
@@ -148,12 +151,7 @@ def update(configuration: dict, state: dict):
         start_timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat("T", "milliseconds").replace("+00:00", "Z")
         to_ts, from_ts = set_timeranges(state, configuration, start_timestamp)
 
-        # Update the state with the new cursor position.
-        # why do this here?
-        # new_state = {"to_ts": to_ts}
-        # log.fine(f"state updated, new state: {repr(new_state)}")
-
-        # Yield a checkpoint operation to save the new state.
+        # start the sync
         yield from sync_items(base_url, headers, from_ts, to_ts, start_timestamp)
 
     except Exception as e:
@@ -204,6 +202,10 @@ def sync_items(base_url, headers, ts_from, ts_to, start_timestamp):
         restaurant_count = len(response_page)
         for index, r in enumerate(response_page):
             guid = r["restaurantGuid"]
+            #rename some fields in response
+            rename_fields = [("restaurantGuid", "guid"), ("restaurantName", "name")]
+            for old_name, new_name in rename_fields:
+                r[new_name] = r.pop(old_name)
             log.info(f"***** starting restaurant {guid}, {index + 1} of {restaurant_count} ***** ")
             yield op.upsert(table="restaurant", data=r)
 
@@ -288,35 +290,38 @@ def process_config(base_url, headers, endpoint, table_name, rst_guid, timerange)
 # dictionary of time ranges is optional for breaks, shifts, and time entries
 # not accepted for jobs and employees
 def process_labor(base_url, headers, endpoint, table_name, rst_guid, params=None):
-    if params is None:
-        params = {}
+    params = params or {}
     headers["Toast-Restaurant-External-ID"] = rst_guid
-    fields_to_extract = {"shift": [("employeeReference", "guid", "employee_reference_guid"),
-                                   ("jobReference", "guid", "job_reference_guid")],
-                         "time_entry":[("employeeReference", "guid", "employee_reference_guid"),
-                                       ("jobReference", "guid", "job_reference_guid"),
-                                       ("shiftReference", "guid", "shift_reference_guid")]}
+
+    fields_to_extract = {
+        "shift": [("employeeReference", "guid", "employee_reference_guid"),
+                  ("jobReference", "guid", "job_reference_guid")],
+        "time_entry": [("employeeReference", "guid", "employee_reference_guid"),
+                       ("jobReference", "guid", "job_reference_guid"),
+                       ("shiftReference", "guid", "shift_reference_guid")]
+    }
 
     try:
         response_page, next_token = get_api_response(base_url + endpoint, headers, params=params)
         log.fine(f"restaurant {rst_guid}: response_page has {len(response_page)} items for {endpoint}")
+
         for o in response_page:
-            # just call process_child with some changes? This is really ugly
-            if endpoint == "/labor/v1/timeEntries" and "breaks" in o and len(o["breaks"]) > 0:
+            if endpoint == "/labor/v1/timeEntries" and o.get("breaks"):
                 yield from process_child(o["breaks"], "break", "time_entry_guid", o["guid"])
-            if endpoint == "/labor/v1/employees":
-                if "jobReferences" in o and len(o["jobReferences"]) > 0:
-                    yield from process_child(o["jobReferences"], "employee_job_reference", "employee_guid", o["guid"])
-                if "wageOverrides" in o and len(o["wageOverrides"]) > 0:
-                    yield from process_child(o["wageOverrides"], "employee_wage_override", "employee_guid", o["guid"])
-            if endpoint == "/labor/v1/shifts":
+            elif endpoint == "/labor/v1/employees":
+                yield from process_child(o.get("jobReferences", []), "employee_job_reference", "employee_guid", o["guid"])
+                yield from process_child(o.get("wageOverrides", []), "employee_wage_override", "employee_guid", o["guid"])
+            elif endpoint == "/labor/v1/shifts":
                 o = flatten_fields(["scheduleConfig"], o)
-            if fields_to_extract.get(table_name):
+
+            if table_name in fields_to_extract:
                 o = extract_fields(fields_to_extract[table_name], o)
+
             o = stringify_lists(o)
             o["restaurant_guid"] = rst_guid
             yield op.upsert(table=table_name, data=o)
-            if "deleted" in o and "guid" in o and o["deleted"]:
+
+            if o.get("deleted") and "guid" in o:
                 yield op.delete(table=table_name, keys={"guid": o["guid"]})
 
     except Exception as e:
@@ -379,7 +384,8 @@ def process_orders(base_url, headers, endpoint, table_name, rst_guid, params):
 def process_payments(order):
     """Processes payment information for an order."""
 
-    fields_to_flatten = ["cashDrawer", "createdDevice", "otherPayment", "refund", "server"]
+    fields_to_flatten = ["cashDrawer", "createdDevice", "lastModifiedDevice"
+        , "otherPayment", "refund", "server"]
     if "checks" in order and order["checks"]:
         yield from process_child(order["checks"], "orders_check", "orders_guid", order["guid"])
         for check in order["checks"]:
@@ -442,8 +448,7 @@ def process_child (parent, table_name, id_field_name, id_field):
         "orders_check_applied_service_charge": [
             ("appliedTax", "orders_check_applied_service_charge_applied_tax")],
         "orders_check_selection": [
-            #"appliedTaxes" occasionally contains null guids, how to handle?
-            #("appliedTaxes", "orders_check_selection_applied_tax"),
+            ("appliedTaxes", "orders_check_selection_applied_tax"),
             ("modifiers", "orders_check_selection_modifier"),
             ("appliedDiscounts", "orders_check_selection_applied_discount")],
         "orders_check_selection_applied_discount":
@@ -453,12 +458,14 @@ def process_child (parent, table_name, id_field_name, id_field):
 
     fields_to_flatten = {
         "break": ["breakType"],
-        "orders_check": ["customer"],
-        "orders_check_applied_discount": ["approver", "discount", "appliedDiscountReason"],
+        "employee_wage_override": ["jobReference"],
+        "orders_check": ["customer", "createdDevice", "lastModifiedDevice"],
+        "orders_check_applied_discount": ["approver", "appliedDiscountReason", "discount"],
         "orders_check_applied_discount_trigger": ["selection"],
         "orders_check_applied_service_charge": ["serviceCharge"],
         "orders_check_selection": ["salesCategory", "itemGroup", "item", "diningOption", "voidReason"],
         "orders_check_selection_applied_discount": ["approver", "appliedDiscountReason", "discount"],
+        "orders_check_selection_applied_tax": ["taxRate"],
         "orders_check_selection_modifier": ["voidReason", "optionGroup", "salesCategory"
             , "item", "diningOption", "preModifier" ],
         "orders_check_selection_applied_discount_trigger": ["selection"]}
@@ -469,6 +476,7 @@ def process_child (parent, table_name, id_field_name, id_field):
         if table_name in relationships:
             for child_key, child_table_name in relationships[table_name]:
                 if len(p.get(child_key, [])) > 0:  # Use .get() to handle missing keys gracefully
+                    # check for null guids in appliedTaxes[]
                     yield from process_child(
                         p[child_key],
                         child_table_name,
@@ -479,8 +487,12 @@ def process_child (parent, table_name, id_field_name, id_field):
         if table_name in fields_to_flatten:
             #log.fine(f"flattening fields in {table_name}")
             p = flatten_fields(fields_to_flatten[table_name], p)
+        if table_name == "orders_check_selection_applied_tax":
+            if p.get("guid") is None:
+                p["guid"] = "gen-" + str(uuid.uuid4())
         p = stringify_lists(p)
         yield op.upsert(table=table_name, data=p)
+
 
 def process_void_info(payment):
     """
@@ -550,22 +562,49 @@ def get_api_response(endpoint_path, headers, **kwargs):
     """
     timerange_data = kwargs["data"] if "data" in kwargs else {}
     params = copy.deepcopy(kwargs["params"]) if "params" in kwargs else {}
-    response = rq.get(endpoint_path, headers=headers, data=timerange_data, params=params)
 
-    if response.status_code == 409:
-        # recommended by Toast to retry without pageToken
-        params.pop("pageToken")
-        log.info(f"received 409 error, retrying {endpoint_path} without pageToken")
-        response = rq.get(endpoint_path, headers=headers, data=params)
+    while True:  # Keep retrying until a successful response is received
+        response = rq.get(endpoint_path, headers=headers, data=timerange_data, params=params)
 
-    if response.status_code == 400:
-        log.info(response.json()["message"])
+        # Handle 429 Too Many Requests
+        if response.status_code == 429:
+            retry_after = response.headers.get("Retry-After")
+            rate_limit_reset = response.headers.get("X-Toast-RateLimit-Reset")
 
-    response.raise_for_status()  # Ensure we raise an exception for HTTP errors.
-    response_page = response.json()
-    response_headers = response.headers
-    next_page_token = response_headers["Toast-Next-Page-Token"] if "Toast-Next-Page-Token" in response_headers else None
-    return response_page, next_page_token
+            wait_time = None
+            if retry_after:  # `Retry-After` is given in seconds
+                wait_time = int(retry_after)
+            elif rate_limit_reset:
+                try:
+                    reset_time = int(rate_limit_reset)  # Convert epoch timestamp to int
+                    wait_time = max(0, reset_time - int(time.time()))  # Calculate time left
+                except ValueError:
+                    log.info(f"Invalid X-Toast-RateLimit-Reset value: {rate_limit_reset}")
+                    wait_time = 5  # Default fallback wait time if parsing fails
+
+            if wait_time:
+                log.info(f"Rate limit exceeded. Retrying in {wait_time} seconds...")
+                time.sleep(wait_time)
+                continue  # Retry the request
+
+        # Handle 409 Conflict: Retry without pageToken
+        if response.status_code == 409:
+            params.pop("pageToken", None)
+            log.info(f"Received 409 error, retrying {endpoint_path} without pageToken")
+            continue  # Retry without pageToken
+
+        # Handle 400 Bad Request (log message and return None)
+        if response.status_code == 400:
+            log.info(f"Bad request: {response.json().get('message')}")
+            return None, None
+
+        response.raise_for_status()  # Raise an error for unexpected HTTP issues
+
+        response_page = response.json()
+        response_headers = response.headers
+        next_page_token = response_headers.get("Toast-Next-Page-Token")
+
+        return response_page, next_page_token  # Return successful response
 
 def stringify_lists(d):
     """
@@ -589,14 +628,31 @@ def flatten_dict (parent_row: dict, dict_field: dict, prefix: str):
     :param prefix: the prefix to add to the name of keys in dict_field to make new keys in parent_row
     :return: parent_row with dict_field flattened into multiple fields
     """
+    # dicts in these fields have unique enough names that they do not need the field prefix
+    fields_to_not_prefix = ["refundDetails", "jobReference"]
+
     if not dict_field:  # Quick exit for empty dictionaries
         return parent_row
 
-    parent_row.update({f"{prefix}_{key}": value for key, value in dict_field.items()})
+    for key, value in dict_field.items():
+        if key.startswith(prefix + "_"):
+            new_key = key  # Keep it unchanged
+        elif prefix in fields_to_not_prefix:
+            new_key = key  # Keep it unchanged for exempted fields
+        else:
+            new_key = f"{prefix}_{key}"  # Build the new flattened key
+
+        if isinstance(value, dict):  # If the value is another dictionary, recurse
+            flatten_dict(parent_row, value, new_key)
+        else:
+            parent_row[new_key] = value  # Store the value directly if not a dictionary
+
     return parent_row
 
 def flatten_fields(fields: list, row: dict):
     row = {**row}  # Ensures row modifications don't affect the original dictionary
+
+    # don't repeat words?
 
     for field in fields:
         value = row.get(field)  # Avoids multiple dictionary lookups
