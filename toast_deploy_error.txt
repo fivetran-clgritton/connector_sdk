@@ -1,0 +1,199 @@
+Microsoft Windows [Version 10.0.26100.2605]
+(c) Microsoft Corporation. All rights reserved.
+
+C:\Users\CL Abeel\Desktop\sdk>cd toast
+
+C:\Users\CL Abeel\Desktop\sdk\toast>venv\Scripts\activate
+
+(venv) C:\Users\CL Abeel\Desktop\sdk\toast>fivetran reset --configuration configuration.json
+This will delete your current state and `warehouse.db` files. Do you want to continue? (Y/N): y
+Jan 07, 2025 05:18:34 PM INFO: Reset Successful
+
+(venv) C:\Users\CL Abeel\Desktop\sdk\toast>fivetran debug --configuration configuration.json
+Jan 07, 2025 05:18:39 PM WARNING: Adding `requirements.txt` file to your project folder.
+Jan 07, 2025 05:18:39 PM SEVERE: Please include the following dependency libraries in requirements.txt, to be used by Fivetran production. For more information, please visit: https://fivetran.com/docs/connectors/connector-sdk/detailed-guide#workingwithrequirementstxtfile
+~ivetran_connector_sdk==0.12.12.1
+Jan 07, 2025 05:18:39 PM INFO: Debugging connector at: C:\Users\CL Abeel\Desktop\sdk\toast
+Jan 07, 2025 05:18:41 PM INFO: Running connector tester...
+Jan 07, 2025 05:18:42 PM INFO: Version: 0.24.1209.001 
+Jan 07, 2025 05:18:42 PM INFO: Destination schema: C:\Users\CL Abeel\Desktop\sdk\toast\files/warehouse.db/tester 
+SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
+Jan 07, 2025 05:18:44 PM INFO: Configuration:
+{}
+Jan 07, 2025 05:18:44 PM INFO: Previous state:
+{}
+Jan 07, 2025 05:18:44 PM INFO: [SchemaChange]: tester.restaurant 
+Jan 07, 2025 05:18:44 PM INFO: [SchemaChange]: tester.orders
+Jan 07, 2025 05:18:44 PM INFO: [SchemaChange]: tester.job
+Jan 07, 2025 05:18:44 PM INFO: [SchemaChange]: tester.shift
+Jan 07, 2025 05:18:44 PM INFO: [SchemaChange]: tester.employee
+Jan 07, 2025 05:18:44 PM INFO: [SchemaChange]: tester.time_entry
+Jan 07, 2025 05:18:44 PM INFO: [SchemaChange]: tester.dining_option
+Jan 07, 2025 05:18:44 PM INFO: [SchemaChange]: tester.discounts
+Jan 07, 2025 05:18:44 PM INFO: [SchemaChange]: tester.menu_group
+Jan 07, 2025 05:18:44 PM INFO: [SchemaChange]: tester.menu_item
+Jan 07, 2025 05:18:44 PM INFO: [SchemaChange]: tester.menu
+Jan 07, 2025 05:18:46 PM FINE: state updated, new state: {'to_ts': '2025-01-07T22:18:44.618+00:00'}
+Jan 07, 2025 05:18:46 PM INFO: Checkpoint: {"to_ts": "2025-01-07T22:18:44.618+00:00"} 
+Jan 07, 2025 05:18:46 PM INFO: ***** starting restaurant 1a19d1cc-bf22-4564-8ec2-1add1992c3d8, 1 of 5 ***** 
+Jan 07, 2025 05:18:47 PM INFO: [CreateTable]: tester.restaurant 
+Jan 07, 2025 05:18:47 PM FINE: restaurant 1a19d1cc-bf22-4564-8ec2-1add1992c3d8: response_page has 0 items for /config/v2/diningOptions
+Jan 07, 2025 05:18:47 PM FINE: restaurant 1a19d1cc-bf22-4564-8ec2-1add1992c3d8: last page reached for /config/v2/diningOptions
+Jan 07, 2025 05:18:47 PM FINE: restaurant 1a19d1cc-bf22-4564-8ec2-1add1992c3d8: response_page has 1 items for /config/v2/discounts
+Jan 07, 2025 05:18:47 PM FINE: restaurant 1a19d1cc-bf22-4564-8ec2-1add1992c3d8: last page reached for /config/v2/discounts
+Jan 07, 2025 05:18:47 PM INFO: [CreateTable]: tester.discounts 
+Jan 07, 2025 05:18:47 PM FINE: restaurant 1a19d1cc-bf22-4564-8ec2-1add1992c3d8: response_page has 25 items for /config/v2/menuGroups
+Jan 07, 2025 05:18:47 PM FINE: restaurant 1a19d1cc-bf22-4564-8ec2-1add1992c3d8: last page reached for /config/v2/menuGroups
+Jan 07, 2025 05:18:47 PM INFO: [CreateTable]: tester.menu_group
+Jan 07, 2025 05:18:47 PM FINE: restaurant 1a19d1cc-bf22-4564-8ec2-1add1992c3d8: response_page has 54 items for /config/v2/menuItems
+Jan 07, 2025 05:18:47 PM FINE: restaurant 1a19d1cc-bf22-4564-8ec2-1add1992c3d8: last page reached for /config/v2/menuItems
+Jan 07, 2025 05:18:47 PM FINE: restaurant 1a19d1cc-bf22-4564-8ec2-1add1992c3d8: response_page has 5 items for /config/v2/menus
+Jan 07, 2025 05:18:48 PM FINE: restaurant 1a19d1cc-bf22-4564-8ec2-1add1992c3d8: last page reached for /config/v2/menus
+Jan 07, 2025 05:18:48 PM FINE: restaurant 1a19d1cc-bf22-4564-8ec2-1add1992c3d8: response_page has 41 items for /orders/v2/ordersBulk
+Jan 07, 2025 05:18:48 PM FINE: restaurant 1a19d1cc-bf22-4564-8ec2-1add1992c3d8: last page reached for /orders/v2/ordersBulk
+Jan 07, 2025 05:18:48 PM FINE: restaurant 1a19d1cc-bf22-4564-8ec2-1add1992c3d8: response_page has 28 items for /labor/v1/shifts
+Jan 07, 2025 05:18:48 PM FINE: restaurant 1a19d1cc-bf22-4564-8ec2-1add1992c3d8: last page reached for /labor/v1/shifts
+Jan 07, 2025 05:18:49 PM FINE: restaurant 1a19d1cc-bf22-4564-8ec2-1add1992c3d8: response_page has 6 items for /labor/v1/timeEntries
+Jan 07, 2025 05:18:49 PM FINE: restaurant 1a19d1cc-bf22-4564-8ec2-1add1992c3d8: last page reached for /labor/v1/timeEntries
+Jan 07, 2025 05:18:49 PM FINE: restaurant 1a19d1cc-bf22-4564-8ec2-1add1992c3d8: response_page has 83 items for /labor/v1/jobs
+Jan 07, 2025 05:18:49 PM FINE: restaurant 1a19d1cc-bf22-4564-8ec2-1add1992c3d8: last page reached for /labor/v1/jobs
+Jan 07, 2025 05:18:49 PM FINE: restaurant 1a19d1cc-bf22-4564-8ec2-1add1992c3d8: response_page has 259 items for /labor/v1/employees
+Jan 07, 2025 05:18:50 PM INFO: [CreateTable]: tester.menu_item 
+Jan 07, 2025 05:18:50 PM FINE: restaurant 1a19d1cc-bf22-4564-8ec2-1add1992c3d8: last page reached for /labor/v1/employees
+Jan 07, 2025 05:18:50 PM INFO: ***** starting restaurant cb11221b-b7a3-40ee-80c5-ff20b79d10e1, 2 of 5 *****
+Jan 07, 2025 05:18:50 PM FINE: restaurant cb11221b-b7a3-40ee-80c5-ff20b79d10e1: response_page has 0 items for /config/v2/diningOptions
+Jan 07, 2025 05:18:50 PM FINE: restaurant cb11221b-b7a3-40ee-80c5-ff20b79d10e1: last page reached for /config/v2/diningOptions
+Jan 07, 2025 05:18:51 PM FINE: restaurant cb11221b-b7a3-40ee-80c5-ff20b79d10e1: response_page has 1 items for /config/v2/discounts
+Jan 07, 2025 05:18:51 PM FINE: restaurant cb11221b-b7a3-40ee-80c5-ff20b79d10e1: last page reached for /config/v2/discounts
+Jan 07, 2025 05:18:51 PM FINE: restaurant cb11221b-b7a3-40ee-80c5-ff20b79d10e1: response_page has 25 items for /config/v2/menuGroups
+Jan 07, 2025 05:18:51 PM FINE: restaurant cb11221b-b7a3-40ee-80c5-ff20b79d10e1: last page reached for /config/v2/menuGroups
+Jan 07, 2025 05:18:51 PM FINE: restaurant cb11221b-b7a3-40ee-80c5-ff20b79d10e1: response_page has 54 items for /config/v2/menuItems
+Jan 07, 2025 05:18:51 PM FINE: restaurant cb11221b-b7a3-40ee-80c5-ff20b79d10e1: last page reached for /config/v2/menuItems
+Jan 07, 2025 05:18:51 PM FINE: restaurant cb11221b-b7a3-40ee-80c5-ff20b79d10e1: response_page has 5 items for /config/v2/menus
+Jan 07, 2025 05:18:51 PM FINE: restaurant cb11221b-b7a3-40ee-80c5-ff20b79d10e1: last page reached for /config/v2/menus
+Jan 07, 2025 05:18:52 PM FINE: restaurant cb11221b-b7a3-40ee-80c5-ff20b79d10e1: response_page has 55 items for /orders/v2/ordersBulk
+Jan 07, 2025 05:18:54 PM INFO: [CreateTable]: tester.menu 
+Jan 07, 2025 05:18:55 PM INFO: [CreateTable]: tester.orders 
+Jan 07, 2025 05:19:02 PM INFO: [CreateTable]: tester.shift 
+Jan 07, 2025 05:19:04 PM INFO: [CreateTable]: tester.time_entry 
+Jan 07, 2025 05:19:05 PM INFO: [CreateTable]: tester.job 
+Jan 07, 2025 05:19:11 PM INFO: [CreateTable]: tester.employee 
+Jan 07, 2025 05:19:20 PM FINE: restaurant cb11221b-b7a3-40ee-80c5-ff20b79d10e1: last page reached for /orders/v2/ordersBulk
+Jan 07, 2025 05:19:20 PM FINE: restaurant cb11221b-b7a3-40ee-80c5-ff20b79d10e1: response_page has 0 items for /labor/v1/shifts
+Jan 07, 2025 05:19:20 PM FINE: restaurant cb11221b-b7a3-40ee-80c5-ff20b79d10e1: last page reached for /labor/v1/shifts
+Jan 07, 2025 05:19:20 PM FINE: restaurant cb11221b-b7a3-40ee-80c5-ff20b79d10e1: response_page has 2 items for /labor/v1/timeEntries
+Jan 07, 2025 05:19:20 PM FINE: restaurant cb11221b-b7a3-40ee-80c5-ff20b79d10e1: last page reached for /labor/v1/timeEntries
+Jan 07, 2025 05:19:21 PM FINE: restaurant cb11221b-b7a3-40ee-80c5-ff20b79d10e1: response_page has 83 items for /labor/v1/jobs
+Jan 07, 2025 05:19:21 PM FINE: restaurant cb11221b-b7a3-40ee-80c5-ff20b79d10e1: last page reached for /labor/v1/jobs
+Jan 07, 2025 05:19:21 PM FINE: restaurant cb11221b-b7a3-40ee-80c5-ff20b79d10e1: response_page has 148 items for /labor/v1/employees
+Jan 07, 2025 05:19:22 PM FINE: restaurant cb11221b-b7a3-40ee-80c5-ff20b79d10e1: last page reached for /labor/v1/employees
+Jan 07, 2025 05:19:22 PM INFO: ***** starting restaurant ec5c3676-8177-46cc-bf2e-cef2f31cbc9c, 3 of 5 *****
+Jan 07, 2025 05:19:22 PM FINE: restaurant ec5c3676-8177-46cc-bf2e-cef2f31cbc9c: response_page has 0 items for /config/v2/diningOptions
+Jan 07, 2025 05:19:22 PM FINE: restaurant ec5c3676-8177-46cc-bf2e-cef2f31cbc9c: last page reached for /config/v2/diningOptions
+Jan 07, 2025 05:19:22 PM FINE: restaurant ec5c3676-8177-46cc-bf2e-cef2f31cbc9c: response_page has 1 items for /config/v2/discounts
+Jan 07, 2025 05:19:22 PM FINE: restaurant ec5c3676-8177-46cc-bf2e-cef2f31cbc9c: last page reached for /config/v2/discounts
+Jan 07, 2025 05:19:22 PM FINE: restaurant ec5c3676-8177-46cc-bf2e-cef2f31cbc9c: response_page has 25 items for /config/v2/menuGroups
+Jan 07, 2025 05:19:22 PM FINE: restaurant ec5c3676-8177-46cc-bf2e-cef2f31cbc9c: last page reached for /config/v2/menuGroups
+Jan 07, 2025 05:19:23 PM FINE: restaurant ec5c3676-8177-46cc-bf2e-cef2f31cbc9c: response_page has 54 items for /config/v2/menuItems
+Jan 07, 2025 05:19:23 PM FINE: restaurant ec5c3676-8177-46cc-bf2e-cef2f31cbc9c: last page reached for /config/v2/menuItems
+Jan 07, 2025 05:19:23 PM FINE: restaurant ec5c3676-8177-46cc-bf2e-cef2f31cbc9c: response_page has 5 items for /config/v2/menus
+Jan 07, 2025 05:19:23 PM FINE: restaurant ec5c3676-8177-46cc-bf2e-cef2f31cbc9c: last page reached for /config/v2/menus
+Jan 07, 2025 05:19:23 PM FINE: restaurant ec5c3676-8177-46cc-bf2e-cef2f31cbc9c: response_page has 28 items for /orders/v2/ordersBulk
+Jan 07, 2025 05:20:09 PM FINE: restaurant ec5c3676-8177-46cc-bf2e-cef2f31cbc9c: last page reached for /orders/v2/ordersBulk
+Jan 07, 2025 05:20:09 PM FINE: restaurant ec5c3676-8177-46cc-bf2e-cef2f31cbc9c: response_page has 0 items for /labor/v1/shifts
+Jan 07, 2025 05:20:09 PM FINE: restaurant ec5c3676-8177-46cc-bf2e-cef2f31cbc9c: last page reached for /labor/v1/shifts
+Jan 07, 2025 05:20:10 PM FINE: restaurant ec5c3676-8177-46cc-bf2e-cef2f31cbc9c: response_page has 102 items for /labor/v1/timeEntries
+Jan 07, 2025 05:20:10 PM FINE: restaurant ec5c3676-8177-46cc-bf2e-cef2f31cbc9c: last page reached for /labor/v1/timeEntries
+Jan 07, 2025 05:20:10 PM FINE: restaurant ec5c3676-8177-46cc-bf2e-cef2f31cbc9c: response_page has 84 items for /labor/v1/jobs
+Jan 07, 2025 05:20:11 PM FINE: restaurant ec5c3676-8177-46cc-bf2e-cef2f31cbc9c: last page reached for /labor/v1/jobs
+Jan 07, 2025 05:20:11 PM FINE: restaurant ec5c3676-8177-46cc-bf2e-cef2f31cbc9c: response_page has 148 items for /labor/v1/employees
+Jan 07, 2025 05:20:12 PM FINE: restaurant ec5c3676-8177-46cc-bf2e-cef2f31cbc9c: last page reached for /labor/v1/employees
+Jan 07, 2025 05:20:12 PM INFO: ***** starting restaurant 59c3845f-833e-4434-a951-4f47947379fb, 4 of 5 *****
+Jan 07, 2025 05:20:12 PM FINE: restaurant 59c3845f-833e-4434-a951-4f47947379fb: response_page has 0 items for /config/v2/diningOptions
+Jan 07, 2025 05:20:12 PM FINE: restaurant 59c3845f-833e-4434-a951-4f47947379fb: last page reached for /config/v2/diningOptions
+Jan 07, 2025 05:20:12 PM FINE: restaurant 59c3845f-833e-4434-a951-4f47947379fb: response_page has 1 items for /config/v2/discounts
+Jan 07, 2025 05:20:12 PM FINE: restaurant 59c3845f-833e-4434-a951-4f47947379fb: last page reached for /config/v2/discounts
+Jan 07, 2025 05:20:12 PM FINE: restaurant 59c3845f-833e-4434-a951-4f47947379fb: response_page has 25 items for /config/v2/menuGroups
+Jan 07, 2025 05:20:12 PM FINE: restaurant 59c3845f-833e-4434-a951-4f47947379fb: last page reached for /config/v2/menuGroups
+Jan 07, 2025 05:20:13 PM FINE: restaurant 59c3845f-833e-4434-a951-4f47947379fb: response_page has 54 items for /config/v2/menuItems
+Jan 07, 2025 05:20:13 PM FINE: restaurant 59c3845f-833e-4434-a951-4f47947379fb: last page reached for /config/v2/menuItems
+Jan 07, 2025 05:20:13 PM FINE: restaurant 59c3845f-833e-4434-a951-4f47947379fb: response_page has 5 items for /config/v2/menus
+Jan 07, 2025 05:20:13 PM FINE: restaurant 59c3845f-833e-4434-a951-4f47947379fb: last page reached for /config/v2/menus
+Jan 07, 2025 05:20:14 PM FINE: restaurant 59c3845f-833e-4434-a951-4f47947379fb: response_page has 11 items for /orders/v2/ordersBulk
+Jan 07, 2025 05:21:03 PM FINE: restaurant 59c3845f-833e-4434-a951-4f47947379fb: last page reached for /orders/v2/ordersBulk
+Jan 07, 2025 05:21:03 PM FINE: restaurant 59c3845f-833e-4434-a951-4f47947379fb: response_page has 0 items for /labor/v1/shifts
+Jan 07, 2025 05:21:03 PM FINE: restaurant 59c3845f-833e-4434-a951-4f47947379fb: last page reached for /labor/v1/shifts
+Jan 07, 2025 05:21:04 PM FINE: restaurant 59c3845f-833e-4434-a951-4f47947379fb: response_page has 5 items for /labor/v1/timeEntries
+Jan 07, 2025 05:21:04 PM FINE: restaurant 59c3845f-833e-4434-a951-4f47947379fb: last page reached for /labor/v1/timeEntries
+Jan 07, 2025 05:21:04 PM FINE: restaurant 59c3845f-833e-4434-a951-4f47947379fb: response_page has 83 items for /labor/v1/jobs
+Jan 07, 2025 05:21:04 PM FINE: restaurant 59c3845f-833e-4434-a951-4f47947379fb: last page reached for /labor/v1/jobs
+Jan 07, 2025 05:21:04 PM FINE: restaurant 59c3845f-833e-4434-a951-4f47947379fb: response_page has 174 items for /labor/v1/employees
+Jan 07, 2025 05:21:05 PM FINE: restaurant 59c3845f-833e-4434-a951-4f47947379fb: last page reached for /labor/v1/employees
+Jan 07, 2025 05:21:05 PM INFO: ***** starting restaurant 77d21138-52da-4e23-8a33-288f56d57be6, 5 of 5 *****
+Jan 07, 2025 05:21:05 PM FINE: restaurant 77d21138-52da-4e23-8a33-288f56d57be6: response_page has 0 items for /config/v2/diningOptions
+Jan 07, 2025 05:21:05 PM FINE: restaurant 77d21138-52da-4e23-8a33-288f56d57be6: last page reached for /config/v2/diningOptions
+Jan 07, 2025 05:21:05 PM FINE: restaurant 77d21138-52da-4e23-8a33-288f56d57be6: response_page has 1 items for /config/v2/discounts
+Jan 07, 2025 05:21:05 PM FINE: restaurant 77d21138-52da-4e23-8a33-288f56d57be6: last page reached for /config/v2/discounts
+Jan 07, 2025 05:21:06 PM FINE: restaurant 77d21138-52da-4e23-8a33-288f56d57be6: response_page has 25 items for /config/v2/menuGroups
+Jan 07, 2025 05:21:06 PM FINE: restaurant 77d21138-52da-4e23-8a33-288f56d57be6: last page reached for /config/v2/menuGroups
+Jan 07, 2025 05:21:06 PM FINE: restaurant 77d21138-52da-4e23-8a33-288f56d57be6: response_page has 54 items for /config/v2/menuItems
+Jan 07, 2025 05:21:06 PM FINE: restaurant 77d21138-52da-4e23-8a33-288f56d57be6: last page reached for /config/v2/menuItems
+Jan 07, 2025 05:21:06 PM FINE: restaurant 77d21138-52da-4e23-8a33-288f56d57be6: response_page has 5 items for /config/v2/menus
+Jan 07, 2025 05:21:06 PM FINE: restaurant 77d21138-52da-4e23-8a33-288f56d57be6: last page reached for /config/v2/menus
+Jan 07, 2025 05:21:06 PM FINE: restaurant 77d21138-52da-4e23-8a33-288f56d57be6: response_page has 0 items for /orders/v2/ordersBulk
+Jan 07, 2025 05:21:06 PM FINE: restaurant 77d21138-52da-4e23-8a33-288f56d57be6: last page reached for /orders/v2/ordersBulk
+Jan 07, 2025 05:21:07 PM FINE: restaurant 77d21138-52da-4e23-8a33-288f56d57be6: response_page has 0 items for /labor/v1/shifts
+Jan 07, 2025 05:21:07 PM FINE: restaurant 77d21138-52da-4e23-8a33-288f56d57be6: last page reached for /labor/v1/shifts
+Jan 07, 2025 05:21:07 PM FINE: restaurant 77d21138-52da-4e23-8a33-288f56d57be6: response_page has 0 items for /labor/v1/timeEntries
+Jan 07, 2025 05:21:07 PM FINE: restaurant 77d21138-52da-4e23-8a33-288f56d57be6: last page reached for /labor/v1/timeEntries
+Jan 07, 2025 05:21:07 PM FINE: restaurant 77d21138-52da-4e23-8a33-288f56d57be6: response_page has 83 items for /labor/v1/jobs
+Jan 07, 2025 05:21:07 PM FINE: restaurant 77d21138-52da-4e23-8a33-288f56d57be6: last page reached for /labor/v1/jobs
+Jan 07, 2025 05:21:07 PM FINE: restaurant 77d21138-52da-4e23-8a33-288f56d57be6: response_page has 13 items for /labor/v1/employees
+Jan 07, 2025 05:21:07 PM FINE: restaurant 77d21138-52da-4e23-8a33-288f56d57be6: last page reached for /labor/v1/employees
+Jan 07, 2025 05:23:10 PM INFO: Checkpoint: {} 
+Jan 07, 2025 05:23:10 PM INFO:
+Upserts: 1866
+Updates: 0
+Deletes: 0
+Truncates: 0
+SchemaChanges: 11
+Checkpoints: 2
+Jan 07, 2025 05:23:10 PM INFO: Sync SUCCEEDED
+
+(venv) C:\Users\CL Abeel\Desktop\sdk\toast>dir
+ Volume in drive C has no label.
+ Volume Serial Number is 8A10-6B7C
+
+ Directory of C:\Users\CL Abeel\Desktop\sdk\toast
+
+01/07/2025  05:18 PM    <DIR>          .
+01/07/2025  04:55 PM    <DIR>          ..
+01/03/2025  04:08 PM               230 configuration.json
+01/07/2025  05:15 PM            13,053 connector.py
+01/07/2025  05:23 PM    <DIR>          files
+01/07/2025  05:18 PM                 0 requirements.txt
+01/07/2025  05:10 PM    <DIR>          venv
+01/07/2025  05:18 PM    <DIR>          __pycache__
+               3 File(s)         13,283 bytes
+01/07/2025  05:10 PM    <DIR>          venv
+01/07/2025  05:18 PM    <DIR>          __pycache__
+               3 File(s)         13,283 bytes
+               5 Dir(s)  603,292,151,808 bytes free
+
+(venv) C:\Users\CL Abeel\Desktop\sdk\toast>fivetran deploy --api-key %FIVETRAN_API_KEY% --destination csg_cl_abeel_snowflake --connection cl_toast_demo --configuration configuration.json
+Jan 08, 2025 09:39:25 AM INFO: We support only `.py` files and a `requirements.txt` file as part of the code upload. *No other code files* are supported or uploaded during the deployment process. Ensure that your code is structured accordingly and all dependencies are listed in `requirements.txt`
+Jan 08, 2025 09:39:29 AM SEVERE: Please include the following dependency libraries in requirements.txt, to be used by Fivetran production. For more information, please visit: https://fivetran.com/docs/connectors/connector-sdk/detailed-guide#workingwithrequirementstxtfile
+~ivetran_connector_sdk==0.12.12.1
+
+(venv) C:\Users\CL Abeel\Desktop\sdk\toast>
+
+
+
+
+
+
+
+
+

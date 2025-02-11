@@ -1,1 +1,4 @@
-*.json
+# Ignore all .json and .pyc files in all folders
+**/*.json
+**/*.pyc
+__pycache__/
