@@ -1,4 +1,5 @@
 # Ignore all .json and .pyc files in all folders
 **/*.json
 **/*.pyc
+**/*.db
 __pycache__/
