@@ -1,9 +1,0 @@
-{
-    "clientId": "J3expjvC4iy8pY6hAcLU5HFr1BtmkVxC",
-    "clientSecret": "7Tnd9vuB2olt_kph2yPdaunUwV9g_ibIO8VrGHBhfc4VNwDAjhEIxukTV4czoZLw",
-    "userAccessType": "TOAST_MACHINE_CLIENT",
-    "domain": "ws-api.toasttab.com",
-    "connectorId": "hoc_vexatious",
-    "fivetranAPIKey": "eDJQbGk1ZWlWZXFuaG0zWTo3MEphbHlDcG92N2pHOWpWcWNPbUdTUWpVbUdON0JzZA==",
-    "initialSyncStart": "2024-01-01T00:00:00.000Z"
-}
