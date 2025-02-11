@@ -3,5 +3,7 @@
     "clientSecret": "7Tnd9vuB2olt_kph2yPdaunUwV9g_ibIO8VrGHBhfc4VNwDAjhEIxukTV4czoZLw",
     "userAccessType": "TOAST_MACHINE_CLIENT",
     "domain": "ws-api.toasttab.com",
-    "initialSyncStart": "2024-11-15T00:00:00.000Z"
+    "connectorId": "hoc_vexatious",
+    "fivetranAPIKey": "eDJQbGk1ZWlWZXFuaG0zWTo3MEphbHlDcG92N2pHOWpWcWNPbUdTUWpVbUdON0JzZA==",
+    "initialSyncStart": "2025-02-09T00:00:00.000Z"
 }
