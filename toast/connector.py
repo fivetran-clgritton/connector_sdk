@@ -658,21 +658,45 @@ def generate_business_dates (start_ts, end_ts):
 
 def get_api_response(endpoint_path, headers, **kwargs):
     """
-    # The get_api_response function sends an HTTP GET request to the provided URL with the specified parameters.
-    # It performs the following tasks:
-    # 1. Logs the URL and query parameters used for the API call for debugging and tracking purposes.
-    # 2. Makes the API request using the 'requests' library, passing the URL and parameters.
-    # 3. Parses the JSON response from the API and returns it as a dictionary.
-    :param endpoint_path:
-    :param headers:
-    :param kwargs:
-    :return:
-    """
-    timerange_data = kwargs["data"] if "data" in kwargs else {}
-    params = copy.deepcopy(kwargs["params"]) if "params" in kwargs else {}
+    Sends an HTTP GET request to the provided URL with specified parameters.
 
-    while True:  # Keep retrying until a successful response is received
+    - Retries if a 401 Unauthorized response occurs (up to a limit).
+    - Skips the endpoint if a 403 Forbidden response is received.
+    - Handles rate-limiting (429) and retries accordingly.
+    - Logs and returns API responses.
+
+    :param endpoint_path: API URL
+    :param headers: Request headers
+    :param kwargs: Additional request parameters
+    :return: Tuple (response JSON, next_page_token) or (None, None) if failed
+    """
+    timerange_data = kwargs.get("data", {})
+    params = copy.deepcopy(kwargs.get("params", {}))
+
+    max_retries_401 = 3  # Limit retries for 401 errors
+    retry_count_401 = 0
+
+    while True:
+        log.info(str(headers))
         response = rq.get(endpoint_path, headers=headers, data=timerange_data, params=params)
+
+        # Handle 401 Unauthorized (retry up to max retries)
+        if response.status_code == 401:
+            if retry_count_401 >= max_retries_401:  # Fail after max retries
+                log.severe(f"401 Unauthorized - Max retries reached for {endpoint_path}")
+                return None, None
+
+            retry_count_401 += 1
+            #reauth here?
+
+            log.warning(f"401 Unauthorized - Retrying {retry_count_401}/{max_retries_401}")
+            time.sleep(2)
+            continue
+
+        # Handle 403 Forbidden (Skip the endpoint)
+        if response.status_code == 403:
+            log.info(f"403 Forbidden - Skipping {endpoint_path}")
+            raise PermissionError(f"403 Forbidden: Access denied to {endpoint_path}")
 
         # Handle 429 Too Many Requests
         if response.status_code == 429:
@@ -680,20 +704,20 @@ def get_api_response(endpoint_path, headers, **kwargs):
             rate_limit_reset = response.headers.get("X-Toast-RateLimit-Reset")
 
             wait_time = None
-            if retry_after:  # `Retry-After` is given in seconds
+            if retry_after:
                 wait_time = int(retry_after)
             elif rate_limit_reset:
                 try:
-                    reset_time = int(rate_limit_reset)  # Convert epoch timestamp to int
-                    wait_time = max(0, reset_time - int(time.time()))  # Calculate time left
+                    reset_time = int(rate_limit_reset)
+                    wait_time = max(0, reset_time - int(time.time()))
                 except ValueError:
-                    log.info(f"Invalid X-Toast-RateLimit-Reset value: {rate_limit_reset}")
-                    wait_time = 5  # Default fallback wait time if parsing fails
+                    log.warning(f"Invalid X-Toast-RateLimit-Reset value: {rate_limit_reset}")
+                    wait_time = 5  # Fallback wait time
 
             if wait_time:
                 log.info(f"Rate limit exceeded. Retrying in {wait_time} seconds...")
                 time.sleep(wait_time)
-                continue  # Retry the request
+                continue  # Retry request
 
         # Handle 409 Conflict: Retry without pageToken
         if response.status_code == 409:
@@ -701,12 +725,12 @@ def get_api_response(endpoint_path, headers, **kwargs):
             log.info(f"Received 409 error, retrying {endpoint_path} without pageToken")
             continue  # Retry without pageToken
 
-        # Handle 400 Bad Request (log message and return None)
+        # Handle 400 Bad Request
         if response.status_code == 400:
             log.info(f"Bad request: {response.json().get('message')}")
             return None, None
 
-        response.raise_for_status()  # Raise an error for unexpected HTTP issues
+        response.raise_for_status()  # Raise error for unexpected HTTP issues
 
         response_page = response.json()
         response_headers = response.headers
@@ -807,3 +831,4 @@ if __name__ == "main":
         configuration = json.load(f)
     # Adding this code to your `connector.py` allows you to test your connector by running your file directly from your IDE.
     connector.debug(configuration=configuration)
+
