@@ -116,7 +116,7 @@ def schema(configuration: dict):
                     "gratuity": "BOOLEAN",
                     "takeout": "BOOLEAN",
                     "taxable": "BOOLEAN"}},
-        {"table": "orders_check_payment", "primary_key": ["orders_check_id", "payment_id", "orders_id"]},
+        {"table": "orders_check_payment", "primary_key": ["orders_check_id", "payment_id", "orders_guid"]},
         {"table": "orders_check_selection", "primary_key":["id", "orders_check_id"],
             "columns": {"createdDate": "UTC_DATETIME",
                         "modifiedDate": "UTC_DATETIME",
@@ -271,7 +271,7 @@ def process_config(base_url, headers, endpoint, table_name, rst_id, timerange):
     headers["Toast-Restaurant-External-ID"] = rst_id
     more_data = True
     pagination = {}
-    fields_to_extract = {"menu_group": [("menu", "guid", "menu_guid")],
+    fields_to_extract = {"menu_group": [("menu", "guid", "menu_id")],
                          "service_area": [("revenueCenter", "guid", "revenue_center_guid")],
                          "tables": [("revenueCenter", "guid", "revenue_center_guid"),
                                     ("serviceArea", "guid", "service_area_guid")]}
@@ -287,8 +287,7 @@ def process_config(base_url, headers, endpoint, table_name, rst_id, timerange):
                     o = extract_fields(fields_to_extract[table_name], o)
                 o = stringify_lists(o)
                 o["restaurant_id"] = rst_id
-                if "guid" in o:
-                    o["id"] = o.pop("guid")
+                o = replace_guid_with_id(o)
                 yield op.upsert(table=table_name, data=o)
 
             if next_token:
@@ -321,7 +320,7 @@ def process_labor(base_url, headers, endpoint, table_name, rst_id, params=None):
     headers["Toast-Restaurant-External-ID"] = rst_id
 
     fields_to_extract = {
-        "shift": [("employeeReference", "guid", "employee_reference_guid"),
+        "shift": [("employeeReference", "guid", "employee_reference_id"),
                   ("jobReference", "guid", "job_reference_id")],
         "time_entry": [("employeeReference", "guid", "employee_reference_id"),
                        ("jobReference", "guid", "job_reference_id"),
@@ -334,7 +333,7 @@ def process_labor(base_url, headers, endpoint, table_name, rst_id, params=None):
 
         for o in response_page:
             if endpoint == "/labor/v1/timeEntries" and o.get("breaks"):
-                yield from process_child(o["breaks"], "break", "time_entry_id", o["id"])
+                yield from process_child(o["breaks"], "break", "time_entry_id", o["guid"])
             elif endpoint == "/labor/v1/employees":
                 yield from process_child(o.get("jobReferences", []), "employee_job_reference", "employee_id", o["guid"])
                 yield from process_child(o.get("wageOverrides", []), "employee_wage_override", "employee_id", o["guid"])
@@ -346,8 +345,7 @@ def process_labor(base_url, headers, endpoint, table_name, rst_id, params=None):
 
             o = stringify_lists(o)
             o["restaurant_id"] = rst_id
-            if "guid" in o:
-                o["id"] = o.pop("guid")
+            o = replace_guid_with_id(o)
             yield op.upsert(table=table_name, data=o)
 
             if o.get("deleted") and "id" in o:
@@ -388,8 +386,7 @@ def process_cash(base_url, headers, endpoint, table_name, rst_id, params):
             for o in response_page:
                 o = flatten_fields(fields_to_flatten[table_name], o)
                 o["restaurant_id"] = rst_id
-                if "guid" in o:
-                    o["id"] = o.pop("guid")
+                o = replace_guid_with_id(o)
                 yield op.upsert(table=table_name, data=o)
 
     except Exception as e:
@@ -437,14 +434,13 @@ def process_orders(base_url, headers, endpoint, table_name, rst_id, params):
                 order = flatten_fields(fields_to_flatten, order)
 
                 for field in fields_extract_ids:
-                    if order.get(field) and "id" in order[field]:
-                        order[f"{field}_id"] = order[field]["id"]
+                    if order.get(field) and "guid" in order[field]:
+                        order[f"{field}_guid"] = order[field]["guid"]
                         order.pop(field, None)
 
                 order.pop("checks", None)
                 order = stringify_lists(order)
-                if "guid" in order:
-                    order["id"] = order.pop("guid")
+                order = replace_guid_with_id(order)
                 yield op.upsert(table=table_name, data=order)
 
                 if order.get("deleted") and "id" in order:
@@ -479,13 +475,12 @@ def process_payments(order):
                         table="orders_check_payment",
                         data={"orders_check_id": check["guid"],
                               "payment_id": payment["guid"],
-                              "orders_id": order["guid"]}
+                              "orders_guid": order["guid"]}
                     )
                     payment = flatten_fields(fields_to_flatten, payment)
                     payment["restaurant_id"] = order["restaurant_id"]
                     process_void_info(payment)
-                    if "guid" in payment:
-                        payment["id"] = payment.pop("guid")
+                    payment = replace_guid_with_id(payment)
                     yield op.upsert(table="payment", data=payment)
 
 def process_pricing_features(order):
@@ -567,12 +562,11 @@ def process_child (parent, table_name, id_field_name, id_field):
             p = flatten_fields(fields_to_flatten[table_name], p)
         # check for null guids in appliedTaxes[]
         if table_name == "orders_check_selection_applied_tax" and p.get("guid") is None:
-                p["guid"] = "gen-" + str(uuid.uuid4())
+            p["guid"] = "gen-" + str(uuid.uuid4())
         if table_name == "orders_check":
             p.pop("payments", None)
         p = stringify_lists(p)
-        if "guid" in p:
-            p["id"] = p.pop("guid")
+        p = replace_guid_with_id(p)
         yield op.upsert(table=table_name, data=p)
 
 def process_void_info(payment):
@@ -583,14 +577,14 @@ def process_void_info(payment):
     :return:
     """
     if payment.get("voidInfo"):
-        payment["void_info_approver_id"] = payment["voidInfo"]["voidApprover"]["guid"]
+        payment["void_info_approver_guid"] = payment["voidInfo"]["voidApprover"]["guid"]
         payment["void_info_business_date"] = payment["voidInfo"]["voidBusinessDate"]
         payment["void_info_date"] = payment["voidInfo"]["voidDate"]
         if payment["voidInfo"].get("voidUser"):
-            payment["void_info_user_id"] = payment["voidInfo"]["voidUser"]["guid"]
+            payment["void_info_user_guid"] = payment["voidInfo"]["voidUser"]["guid"]
         if payment["voidInfo"].get("voidReason"):
             payment["void_info_reason_entity_type"] = payment["voidInfo"]["voidReason"]["entityType"]
-            payment["void_info_reason_id"] = payment["voidInfo"]["voidReason"]["guid"]
+            payment["void_info_reason_guid"] = payment["voidInfo"]["voidReason"]["guid"]
         payment.pop("voidInfo", None)
 
 def make_headers(conf, base_url):
@@ -778,9 +772,12 @@ def flatten_dict (parent_row: dict, dict_field: dict, prefix: str):
     if not dict_field:  # Quick exit for empty dictionaries
         return parent_row
 
+    dict_field = replace_guid_with_id(dict_field)
     for key, value in dict_field.items():
         if key.startswith(prefix):
             new_key = key  # Keep it unchanged
+        elif key == "tipRefundAmount" and prefix == "refund":
+            new_key = "refund_tip_amount"
         elif prefix in fields_to_not_prefix:
             new_key = key  # Keep it unchanged for exempted fields
         else:
@@ -793,6 +790,11 @@ def flatten_dict (parent_row: dict, dict_field: dict, prefix: str):
 
     return parent_row
 
+def replace_guid_with_id(d: dict):
+    if "guid" in d:
+        d["id"] = d.pop("guid")
+    return d
+
 def flatten_fields(fields: list, row: dict):
     """
     Takes in a list of fields to flatten within a row, calls flatten_dict() if any of those fields are present
@@ -801,7 +803,7 @@ def flatten_fields(fields: list, row: dict):
     :return: dictionary with dictionary values flattened, if their keys are in "fields". The original keys are removed.
     """
     row = {**row}  # Ensures row modifications don't affect the original dictionary
-
+    row = replace_guid_with_id(row)
     for field in fields:
         value = row.get(field)  # Avoids multiple dictionary lookups
         if value is not None:
