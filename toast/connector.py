@@ -769,10 +769,13 @@ def flatten_dict (parent_row: dict, dict_field: dict, prefix: str):
     # dicts in these fields have unique enough names that they do not need the field prefix
     fields_to_not_prefix = ["refundDetails", "jobReference"]
 
+    #dicts in these fields have guid keys that need to be replaced with id
+    fields_to_replace_guid = ["menu", "breakType", "scheduleConfig"]
+
     if not dict_field:  # Quick exit for empty dictionaries
         return parent_row
-
-    dict_field = replace_guid_with_id(dict_field)
+    if prefix in fields_to_replace_guid:
+        dict_field = replace_guid_with_id(dict_field)
     for key, value in dict_field.items():
         if key.startswith(prefix):
             new_key = key  # Keep it unchanged
