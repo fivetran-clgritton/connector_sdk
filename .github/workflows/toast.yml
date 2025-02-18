@@ -46,7 +46,7 @@ jobs:
         env:
           FIVETRAN_API_KEY: ${{ secrets.FIVETRAN_API_KEY }}
           FIVETRAN_DESTINATION: ${{ secrets.FIVETRAN_DESTINATION }}
-          FIVETRAN_CONNECTION: ${{ secrets.FIVETRAN_CONNECTION }}
+          FIVETRAN_CONNECTION: ${{ secrets.FIVETRAN_TOAST_CONNECTION }}
           # `FIVETRAN_DESTINATION` and `FIVETRAN_CONNECTION` are optional parameter. Alternatively, you can hardcode it, for example: `fivetran deploy --api-key $FIVETRAN_API_KEY --destination xyz --connection abc --configuration configuration.json --force`  
         run: |
           echo "Deploying connector"
