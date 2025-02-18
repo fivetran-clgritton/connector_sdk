@@ -11,6 +11,7 @@ import json
 import copy
 # uuid needed for generating guids for orders_check_selection_applied_tax
 import uuid
+from cryptography.fernet import Fernet
 
 # Import required classes from fivetran_connector_sdk
 from fivetran_connector_sdk import Connector # For supporting Connector operations like Update() and Schema()
@@ -26,6 +27,8 @@ def schema(configuration: dict):
     :param configuration: a dictionary that holds the configuration settings for the connector.
     :return: a list of tables with primary keys and any datatypes that we want to specify
     """
+    if 'key' not in configuration:
+        raise ValueError("Could not find 'key' in configs")
 
     return [
 
@@ -151,13 +154,14 @@ def update(configuration: dict, state: dict):
     try:
         domain = configuration["domain"]
         base_url = f"https://{domain}"
-        headers = make_headers(configuration, base_url)
+        key = configuration["key"]
+        headers, state = make_headers(configuration, base_url, state, key)
 
         start_timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat("T", "milliseconds").replace("+00:00", "Z")
         from_ts, to_ts = set_timeranges(state, configuration, start_timestamp)
 
         # start the sync
-        yield from sync_items(base_url, headers, from_ts, to_ts, start_timestamp)
+        yield from sync_items(base_url, headers, from_ts, to_ts, start_timestamp, state)
 
     except Exception as e:
         # Return error response
@@ -166,7 +170,7 @@ def update(configuration: dict, state: dict):
         detailed_message = f"Error Message: {exception_message}\nStack Trace:\n{stack_trace}"
         raise RuntimeError(detailed_message)
 
-def sync_items(base_url, headers, ts_from, ts_to, start_timestamp):
+def sync_items(base_url, headers, ts_from, ts_to, start_timestamp, state):
     """
     This is the main generator function for the connector.
     It yields from other functions that are specific to the endpoint type.
@@ -197,7 +201,7 @@ def sync_items(base_url, headers, ts_from, ts_to, start_timestamp):
         timerange_params = {"startDate": ts_from, "endDate": ts_to}
         modified_params = {"modifiedStartDate": ts_from, "modifiedEndDate": ts_to}
         config_params = {"lastModified": ts_from}
-        state = {"to_ts": ts_to}
+        state["to_ts"] = ts_to
         log.fine(f"state updated, new state: {repr(state)}")
 
         # Get response from API call.
@@ -587,23 +591,62 @@ def process_void_info(payment):
             payment["void_info_reason_guid"] = payment["voidInfo"]["voidReason"]["guid"]
         payment.pop("voidInfo", None)
 
-def make_headers(conf, base_url):
-    """
-    Create authentication headers
-    :param conf:
-    :param base_url:
-    :return:
-    """
-    payload = {"clientId": conf["clientId"],
-               "clientSecret": conf["clientSecret"],
-               "userAccessType": conf["userAccessType"]}
 
-    auth_response = rq.post(base_url + "/authentication/v1/authentication/login", json=payload)
-    auth_page = auth_response.json()
-    auth_token = auth_page["token"]["accessToken"]
+def make_headers(conf, base_url, state, key):
+    """
+    Create authentication headers, reusing a cached token if possible.
 
-    headers = {"Authorization": "Bearer " + auth_token, "accept": "application/json"}
-    return headers
+    :param conf: Dictionary containing authentication details.
+    :param base_url: Base URL of the API.
+    :param state: Dictionary storing token and expiration details.
+    :param key: Encryption key (Fernet) used for token encryption/decryption.
+    :return: Tuple (headers, updated_state)
+    """
+    fernet = Fernet(key)
+    current_time = time.time()
+
+    # Check if a valid token exists and is not expiring in the next hour
+    if "encrypted_token" in state and "token_ttl" in state and state["token_ttl"] > current_time + 3600:
+        try:
+            auth_token = fernet.decrypt(state["encrypted_token"].encode()).decode()
+            log.info("encrypted_token found with at least an hour left, reusing")
+            return {"Authorization": f"Bearer {auth_token}", "Accept": "application/json"}, state
+        except Exception as e:
+            print(f"⚠️ Token decryption failed: {e}, re-authenticating...")
+
+    # No valid token OR token expiring within 1 hour, request a new one
+    payload = {
+        "clientId": conf.get("clientId"),
+        "clientSecret": conf.get("clientSecret"),
+        "userAccessType": conf.get("userAccessType")
+    }
+
+    try:
+        log.info("encrypted_token not found in state or is expiring soon, requesting new token")
+        auth_response = rq.post(f"{base_url}/authentication/v1/authentication/login",
+                                json=payload, timeout=10)
+        auth_response.raise_for_status()
+        auth_page = auth_response.json()
+
+        # Extract token safely
+        auth_token = auth_page.get("token", {}).get("accessToken")
+        token_expiry = auth_page.get("token", {}).get("expiresIn", 3600)  # Default to 1 hour
+
+        if not auth_token:
+            raise ValueError("Authentication failed: accessToken missing in response")
+
+        # Encrypt and store the new token
+        try:
+            encrypted_token = fernet.encrypt(auth_token.encode()).decode()
+            state["encrypted_token"] = encrypted_token
+            state["token_ttl"] = current_time + token_expiry  # Store expiry timestamp
+        except Exception as enc_error:
+            print(f"⚠️ Token encryption failed: {enc_error}. Proceeding without storing.")
+
+        return {"Authorization": f"Bearer {auth_token}", "Accept": "application/json"}, state
+
+    except rq.exceptions.RequestException as e:
+        raise RuntimeError(f"❌ Failed to authenticate: {e}")
 
 def is_older_than_30_days(date_to_check):
     """
@@ -769,13 +812,10 @@ def flatten_dict (parent_row: dict, dict_field: dict, prefix: str):
     # dicts in these fields have unique enough names that they do not need the field prefix
     fields_to_not_prefix = ["refundDetails", "jobReference"]
 
-    #dicts in these fields have guid keys that need to be replaced with id
-    fields_to_replace_guid = ["menu", "breakType", "scheduleConfig"]
-
     if not dict_field:  # Quick exit for empty dictionaries
         return parent_row
-    if prefix in fields_to_replace_guid:
-        dict_field = replace_guid_with_id(dict_field)
+
+    dict_field = replace_guid_with_id(dict_field)
     for key, value in dict_field.items():
         if key.startswith(prefix):
             new_key = key  # Keep it unchanged
