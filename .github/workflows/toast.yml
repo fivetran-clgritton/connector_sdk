@@ -1,0 +1,54 @@
+name: Deploy Fivetran Connector
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'toast/**'
+
+jobs:
+  deploy-fivetran-connector:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install fivetran-connector-sdk
+
+      - name: Install requirements.txt
+        run: |
+          if [ -e requirements.txt ]; then
+            echo '{"level":"INFO", "message": "Pip installing requirements.txt", "message-origin": "connector_sdk"}'
+            pip install -r <(grep -v '^requests\b' requirements.txt)
+          fi
+
+      - name: Create Configuration File
+        run: |
+          echo "{\"clientId\": \"${{ secrets.TOAST_CLIENTID }}\", 
+            \"clientSecret\": \"${{ secrets.TOAST_CLIENTSECRET }}\",
+            \"key\": \"${{ secrets.TOAST_ENCRYPTIONKEY }}\",
+            \"userAccessType\": \"TOAST_MACHINE_CLIENT\",
+            \"domain\": \"ws-api.toasttab.com\",
+            \"initialSyncStart\": \"2024-01-01T00:00:00.000Z\"}" > configuration.json    
+        # MY_KEY is an example of a credential in the configuration file.
+
+      - name: Deploy Fivetran Connector
+        env:
+          FIVETRAN_API_KEY: ${{ secrets.FIVETRAN_API_KEY }}
+          FIVETRAN_DESTINATION: ${{ secrets.FIVETRAN_DESTINATION }}
+          FIVETRAN_CONNECTION: ${{ secrets.FIVETRAN_CONNECTION }}
+          # `FIVETRAN_DESTINATION` and `FIVETRAN_CONNECTION` are optional parameter. Alternatively, you can hardcode it, for example: `fivetran deploy --api-key $FIVETRAN_API_KEY --destination xyz --connection abc --configuration configuration.json --force`  
+        run: |
+          echo "Deploying connector"
+          fivetran deploy --api-key $FIVETRAN_API_KEY --destination $FIVETRAN_DESTINATION --connection $FIVETRAN_CONNECTION --configuration configuration.json --force
+          echo "Successfully deployed $CONNECTION_NAME"
