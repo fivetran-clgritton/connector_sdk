@@ -21,8 +21,8 @@ jobs:
           python-version: '3.11'
 
       - name: Change Directory & List Files
+        working-directory: toast
         run: |
-          cd toast
           echo "Deploying from toast directory"
           ls -la  # List files in directory for debugging
 
@@ -32,16 +32,16 @@ jobs:
           pip install fivetran-connector-sdk
 
       - name: Install requirements.txt
+        working-directory: toast
         run: |
-          cd toast
           if [ -e requirements.txt ]; then
             echo '{"level":"INFO", "message": "Pip installing requirements.txt", "message-origin": "connector_sdk"}'
             pip install -r <(grep -v '^requests\b' requirements.txt)
           fi
 
       - name: Create Configuration File
+        working-directory: toast
         run: |
-          cd toast
           echo "{\"clientId\": \"${{ secrets.TOAST_CLIENTID }}\", 
             \"clientSecret\": \"${{ secrets.TOAST_CLIENTSECRET }}\",
             \"key\": \"${{ secrets.TOAST_ENCRYPTIONKEY }}\",
@@ -50,12 +50,12 @@ jobs:
             \"initialSyncStart\": \"2024-01-01T00:00:00.000Z\"}" > configuration.json 
 
       - name: Deploy Fivetran Connector
+        working-directory: toast
         env:
           FIVETRAN_API_KEY: ${{ secrets.FIVETRAN_API_KEY }}
           FIVETRAN_DESTINATION: ${{ secrets.FIVETRAN_DESTINATION }}
           FIVETRAN_CONNECTION: ${{ secrets.FIVETRAN_TOAST_CONNECTION }}
         run: |
-          cd toast
           echo "Deploying connector"
           fivetran deploy --api-key $FIVETRAN_API_KEY --destination $FIVETRAN_DESTINATION --connection $FIVETRAN_CONNECTION --configuration configuration.json --force
           echo "Successfully deployed $CONNECTION_NAME"
