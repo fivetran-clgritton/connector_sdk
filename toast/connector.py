@@ -609,7 +609,7 @@ def make_headers(conf, base_url, state, key):
     if "encrypted_token" in state and "token_ttl" in state and state["token_ttl"] > current_time + 3600:
         try:
             auth_token = fernet.decrypt(state["encrypted_token"].encode()).decode()
-            log.info("encrypted_token found with at least an hour left, reusing it")
+            log.info("encrypted_token found with at least an hour left, reusing")
             return {"Authorization": f"Bearer {auth_token}", "Accept": "application/json"}, state
         except Exception as e:
             print(f"⚠️ Token decryption failed: {e}, re-authenticating...")
