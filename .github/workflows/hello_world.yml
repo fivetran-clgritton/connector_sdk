@@ -45,16 +45,21 @@ jobs:
       - name: Extract Environment from Tag
         id: extract_env
         run: |
-          TAG_NAME=${{ github.ref_name }}
-          if [[ "$TAG_NAME" == dev-* ]]; then
-            echo "DEPLOY_ENV=dev" >> $GITHUB_ENV
-          elif [[ "$TAG_NAME" == prod-* ]]; then
-            echo "DEPLOY_ENV=production" >> $GITHUB_ENV
-          else
-            echo "Unknown environment, failing..."
-            exit 1
-          fi
-          echo "Deploying to $DEPLOY_ENV"
+          ALL_TAGS=$(git tag --points-at HEAD)
+          echo "All tags for this commit: $ALL_TAGS"
+
+          for TAG_NAME in $ALL_TAGS; do
+            echo "Processing tag: $TAG_NAME"
+
+            # Ensure we only process known tag patterns
+            if [[ "$TAG_NAME" == dev-* ]]; then
+              echo "DEPLOY_ENV=development" >> $GITHUB_ENV
+            elif [[ "$TAG_NAME" == prod-* ]]; then
+              echo "DEPLOY_ENV=production" >> $GITHUB_ENV
+            else
+              echo "Skipping deployment, invalid tag detected: $TAG_NAME"
+            fi
+          done
 
       - name: Set Environment Variables
         env:
