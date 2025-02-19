@@ -26,7 +26,7 @@ def update(configuration: dict, state: dict):
     # - The first argument is the name of the table to upsert the data into, in this case, "hello".
     # - The second argument is a dictionary containing the data to be upserted,
     log.fine(f"upserting to table 'hello'")
-    yield op.upsert(table="hello", data={"message": "hello, dev world!"})
+    yield op.upsert(table="hello", data={"message": "hello, world of dev!"})
 
     # Save the progress by checkpointing the state. This is important for ensuring that the sync process can resume
     # from the correct position in case of next sync or interruptions.
