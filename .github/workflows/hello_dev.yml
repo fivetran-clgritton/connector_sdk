@@ -1,0 +1,81 @@
+name: Deploy hello_world Connector
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'hello_world/**'
+    tags:
+      - 'dev-*'
+      - 'prod-*'
+
+jobs:
+  deploy-fivetran-connector:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Change Directory & List Files
+        working-directory: hello_world
+        run: |
+          echo "Deploying from hello_world directory"
+          ls -la  # List files in directory for debugging
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install fivetran-connector-sdk
+
+      - name: Install requirements.txt
+        working-directory: hello_world
+        run: |
+          if [ -e requirements.txt ]; then
+            echo '{"level":"INFO", "message": "Pip installing requirements.txt", "message-origin": "connector_sdk"}'
+            pip install -r <(grep -v '^requests\b' requirements.txt)
+          fi
+          
+      - name: Extract Environment from Tag
+        id: extract_env
+        run: |
+          TAG_NAME=${{ github.ref_name }}
+          if [[ "$TAG_NAME" == dev-* ]]; then
+            echo "DEPLOY_ENV=dev" >> $GITHUB_ENV
+          elif [[ "$TAG_NAME" == prod-* ]]; then
+            echo "DEPLOY_ENV=production" >> $GITHUB_ENV
+          else
+            echo "Unknown environment, failing..."
+            exit 1
+          fi
+          echo "Deploying to $DEPLOY_ENV"
+
+      - name: Set Environment Variables
+        env:
+          DEPLOY_ENV: ${{ env.DEPLOY_ENV }}
+        run: |
+          if [[ "$DEPLOY_ENV" == "dev" ]]; then
+            echo "Using dev connection name"
+            echo "FIVETRAN_CONNECTION=${{ env.HELLO_DEV }}" >> $GITHUB_ENV
+          elif [[ "$DEPLOY_ENV" == "production" ]]; then
+            echo "Using production connection name"
+            echo "FIVETRAN_CONNECTION=${{ env.HELLO_PROD }}" >> $GITHUB_ENV
+          fi
+          
+      - name: Deploy Fivetran Connector
+        working-directory: hello_world
+        env:
+          FIVETRAN_API_KEY: ${{ secrets.FIVETRAN_API_KEY }}
+          FIVETRAN_DESTINATION: ${{ secrets.FIVETRAN_DESTINATION }}
+        run: |
+          echo "Deploying connector"
+          fivetran deploy --api-key $FIVETRAN_API_KEY 
+                          --destination $FIVETRAN_DESTINATION 
+                          --connection $FIVETRAN_CONNECTION --force
+          echo "Successfully deployed $FIVETRAN_CONNECTION TO $DEPLOY_ENV"
