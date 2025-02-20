@@ -1,14 +1,24 @@
 # Import requests to make HTTP calls to API
+from time import sleep
+
 import requests as rq
 import traceback
 import datetime
 import time
+import os
 import json
+import csv
+import uuid
+import zipfile
 
 # Import required classes from fivetran_connector_sdk
 from fivetran_connector_sdk import Connector # For supporting Connector operations like Update() and Schema()
 from fivetran_connector_sdk import Operations as op # For supporting Data operations like Upsert(), Update(), Delete() and checkpoint()
 from fivetran_connector_sdk import Logging as log # For enabling Logs in your connector code
+
+cert_path = "InsperityCorpMutualSSL.crt"
+key_path = "InsperityCorpMutualSSL_auth.key"
+mv_deph_cols = ["DEPOSIT_ID", "BATCH_DEPOSIT_ID", "PROCESS_ID", "PROCESS_TYPE", "PROCESS_TIMESTAMP", "TAX_CODE_ID", "TAX_CODE", "TAX_DESCRIPTION", "SHORT_DESC", "TAX", "TAXABLE", "EXEMPT_WAGES", "EMPLOYEE_COUNT", "PAYMENT_TYPE", "PAYMENT_STATUS", "CONFIRMATION", "FILING_CONFIRMATION", "COMPANY_ID", "COMPANY_NAME", "REPORTING_PAYROLL", "FEIN", "EIN", "PAYMENT_FREQUENCY", "PERIOD_START", "PERIOD_END", "DUE_DATE", "DEPOSIT_DATE", "DEPOSIT_LATE", "PAYMENT_METHOD", "EFT_REFERENCE", "BANK_ACCOUNT", "BANK_TRA", "AP_VENDOR", "AP_SITE", "PAYEE_NAME", "PAYEE_ADDRESS_NAME", "PAYEE_ADDRESS_LINE1", "PAYEE_ADDRESS_LINE2", "PAYEE_CITY", "PAYEE_STATE", "PAYEE_ZIP", "EFT_ADDENDA_DETAIL", "RETURN_TYPE", "CREATOR", "CREATE_DATE", "MODIFIER", "MODIFY_DATE", "VALIDATOR", "VALIDATE_DATE", "VALIDATE_STATUS", "FILE_NAME", "FILE_CREATE_DATE", "FILE_RECORD_NUM", "EFT_BATCH_ID", "ACTUAL_SETTLEMENT_DATE", "CHECK_PRINTED_WITH", "CHECK_PRINT_DATE", "CHECK_PRINT_PROC_ID", "BANK_RECON_ID", "BANK_RECON_STATUS", "BANK_RECON_TRAN_DATE", "BANK_RECON_TIMESTAMP", "BANK_RECON_BY", "NOTES", "REFUND_AMOUNT_REQUESTED", "REFUND_AMOUNT_EXPECTED", "REFUND_AMOUNT_RECEIVED", "REFUND_RECEIVE_DATE", "REFUND_NOTE", "REFUND_STATUS", "COUPON_FORM_CODE", "COUPON_FORM_DESCRIPTION", "COUPON_GENERIC_FLAG", "COUPON_FILING_METHOD", "COUPON_STATUS", "COUPON_CONFIRMATION"]
 
 def schema(configuration: dict):
     """
@@ -32,14 +42,16 @@ def update(configuration: dict, state: dict):
 
     try:
         token_header = make_headers(configuration, state)
-        log.info(str(token_header))
-        from_ts = state['to_ts'] if 'to_ts' in state else datetime.datetime.now() - datetime.timedelta(days=1)
         now = datetime.datetime.now()
         to_ts = now.strftime("%Y-%m-%dT%H:%M:%S")
 
         # Update the state with the new cursor position, incremented by 1.
         new_state = {"to_ts": to_ts}
         log.fine(f"state updated, new state: {repr(new_state)}")
+
+        for e in json.loads(configuration["dataExtracts"]):
+            print(e)
+            yield from sync_items(configuration, state, token_header, e)
 
         # Yield a checkpoint operation to save the new state.
         yield op.checkpoint(state=new_state)
@@ -51,6 +63,135 @@ def update(configuration: dict, state: dict):
         detailed_message = f"Error Message: {exception_message}\nStack Trace:\n{stack_trace}"
         raise RuntimeError(detailed_message)
 
+def sync_items(configuration: dict, state: dict, headers: dict, extract: dict):
+    # Get response from API call.
+    complete = False
+    conversation_id = str(uuid.uuid4())
+    headers["ADP-ConversationID"] = conversation_id
+
+    submit_endpoint = "/tax/v1/organization-tax-data/processing-jobs/actions/submit"
+    base_url = configuration["baseURL"]
+    status, response_id = submit_process(base_url+submit_endpoint, headers, extract)
+    log.info(status)
+    status_endpoint = f"/tax/v1/organization-tax-data/processing-jobs/{response_id}/processing-status?processName=DATA_EXTRACT"
+
+    while not complete:
+        sleep(10)
+        log.info(f"checking export status for {conversation_id}")
+        status, output_id = get_process_status(base_url+status_endpoint, headers)
+        if status == "completed":
+            complete = True
+            log.info(f"process complete for {extract}")
+            content_endpoint = f"/tax/v1/organization-tax-data/processing-job-outputs/{output_id}/content?processName=DATA_EXTRACT"
+            download_file(base_url+content_endpoint, headers, "test")
+
+    zip_path = "test.zip"
+    extract_path = configuration["unzipDirectory"]
+
+    with zipfile.ZipFile(zip_path, "r") as zip_ref:
+        zip_ref.extractall(extract_path)
+
+    print(f"ZIP file extracted to: {extract_path}")
+
+    matching_files = [fn for fn in os.listdir(extract_path) if "MV_DEPH" in fn]
+    for m in matching_files:
+        log.fine(f"processing {m}")
+        yield from upsert_rows(f"{extract_path}{m}", mv_deph_cols)
+
+
+    #log.info(str(response_page["totalResults"]) + " results for topic " + topic)
+
+    #items = response_page.get("articles", [])
+
+    #for a in items:
+    #    yield op.upsert(table="article", data=r)
+
+    # Save the progress by checkpointing the state. This is important for ensuring that the sync process can resume
+    # from the correct position in case of interruptions.
+    yield op.checkpoint(state)
+
+def upsert_rows (filename: str, colnames: list):
+    #json_data = []
+    log.fine(f"upserting rows for {filename}")
+    with open(filename, "r", newline="", encoding="utf-8") as file:
+        reader = csv.reader(file, delimiter="\t")  # Tab-delimited
+
+        for row in reader:
+            yield op.upsert(table="test", data=dict(zip(colnames, row)))
+
+
+# The get_api_response function sends an HTTP GET request to the provided URL with the specified parameters.
+# It performs the following tasks:
+# 1. Logs the URL and query parameters used for the API call for debugging and tracking purposes.
+# 2. Makes the API request using the 'requests' library, passing the URL and parameters.
+# 3. Parses the JSON response from the API and returns it as a dictionary.
+#
+# The function takes two parameters:
+# - base_url: The URL to which the API request is made.
+# - params: A dictionary of query parameters to be included in the API request.
+#
+# Returns:
+# - response_page: A dictionary containing the parsed JSON response from the API.
+def submit_process(url: str, headers: dict, payload: dict):
+    retry_wait_seconds = 60
+    max_retries = 3
+
+    for attempt in range(max_retries + 1):
+        response = rq.post(url, headers=headers, data=json.dumps(payload), cert=(cert_path, key_path))
+
+        if response.status_code == 400 and attempt < max_retries:
+            print(f"Received 400 response, waiting {retry_wait_seconds} seconds to retry...")
+            time.sleep(retry_wait_seconds)
+            continue  # Retry the request
+
+        response.raise_for_status()  # Ensure we raise an exception for HTTP errors.
+        response_page = response.json()
+        log.fine(response_page)
+        status = response_page.get("_confirmMessage", {}).get("requestStatus")
+        resource_id = response_page.get("_confirmMessage", {}).get("messages", [{}])[0].get("resourceID")
+
+        return status, resource_id
+
+def get_process_status (url: str, headers: dict):
+
+    response = rq.get(url, headers=headers, cert=(cert_path, key_path))
+    response.raise_for_status()  # Ensure we raise an exception for HTTP errors.
+    response_page = response.json()
+    status = response_page.get("processingJob").get("processingJobStatusCode")
+    output_id = response_page.get("processingJob").get("processOutputID")
+
+    return status, output_id
+
+def download_file(url: str, headers: dict, name: str):
+
+    headers["Range"] = "bytes=0-"
+    response = rq.get(url, headers=headers, stream=True, cert=(cert_path, key_path))
+    response.raise_for_status()  # Ensure we raise an exception for HTTP errors.
+
+    with open(f"{name}.zip", "wb") as file:
+        for chunk in response.iter_content(chunk_size=1024):
+            file.write(chunk)
+
+    log.info("ZIP file downloaded successfully!")
+
+    # handle 400s
+    """{
+        "_confirmMessage": {
+            "requestStatus": "failure",
+            "applicationID": "MasterTaxTest",
+            "messageID": "96a87c39-35de-4990-93a9-045a717fd017",
+            "messageDateTime": "2025-02-20T08:57:56.060Z",
+            "messages": [
+                {
+                    "messageCode": "400",
+                    "messageTypeCode": "error",
+                    "messageText": "The request cannot be completed. The requested content is no longer available for download."
+                }
+            ]
+        }
+    }
+    """
+
 def make_headers(conf, state):
     """
     Create authentication headers, reusing a cached token if possible.
@@ -61,8 +202,6 @@ def make_headers(conf, state):
     """
 
     url = "https://api.adp.com/auth/oauth/v2/token"
-    cert_path = "InsperityCorpMutualSSL.crt"
-    key_path = "InsperityCorpMutualSSL_auth.key"
     write_to_file(conf["crtFile"], cert_path)
     write_to_file(conf["keyFile"], key_path)
     payload = f"grant_type=client_credentials&client_id={conf['clientId']}&client_secret={conf['clientSecret']}"
@@ -84,7 +223,7 @@ def make_headers(conf, state):
         if not auth_token:
             raise ValueError("Authentication failed: accessToken missing in response")
 
-        return {"Authorization": f"Bearer {auth_token}", "Accept": "application/json"}
+        return {"Authorization": f"Bearer {auth_token}","Content-Type": "application/json"}
 
     except rq.exceptions.RequestException as e:
         raise RuntimeError(f"❌ Failed to authenticate: {e}")
