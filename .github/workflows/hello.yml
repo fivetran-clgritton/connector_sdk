@@ -50,8 +50,8 @@ jobs:
         working-directory: hello
         env:
           FIVETRAN_API_KEY: ${{ secrets.FIVETRAN_API_KEY }}
-          FIVETRAN_DESTINATION: ${{ env.FIVETRAN_DEV_DESTINATION }}
-          FIVETRAN_CONNECTION: ${{ env.HELLO_DEV }}
+          FIVETRAN_DESTINATION: ${{ vars.FIVETRAN_DEV_DESTINATION }}
+          FIVETRAN_CONNECTION: ${{ vars.HELLO_DEV }}
         run: |
           echo "Deploying connector"
           fivetran deploy --api-key $FIVETRAN_API_KEY --destination $FIVETRAN_DESTINATION --connection $FIVETRAN_CONNECTION --configuration configuration.json --force
