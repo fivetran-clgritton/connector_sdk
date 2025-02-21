@@ -1,0 +1,58 @@
+name: Deploy hello Connector
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'hello/**'
+
+jobs:
+  deploy-fivetran-connector:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Change Directory & List Files
+        working-directory: hello
+        run: |
+          echo "Deploying from hello directory"
+          ls -la  # List files in directory for debugging
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install fivetran-connector-sdk
+
+      - name: Install requirements.txt
+        working-directory: hello
+        run: |
+          if [ -e requirements.txt ]; then
+            echo '{"level":"INFO", "message": "Pip installing requirements.txt", "message-origin": "connector_sdk"}'
+            pip install -r <(grep -v '^requests\b' requirements.txt)
+          fi
+
+      - name: Create Configuration File
+        working-directory: hello
+        run: |
+          echo "{\"clientId\": \"${{ secrets.HELLO_CLIENTID }}\", 
+            \"clientSecret\": \"${{ secrets.HELLO_CLIENTSECRET }}\",
+            \"initialSyncStart\": \"2024-01-01T00:00:00.000Z\"}" > configuration.json 
+
+      - name: Deploy Fivetran Connector
+        working-directory: hello
+        env:
+          FIVETRAN_API_KEY: ${{ secrets.FIVETRAN_API_KEY }}
+          FIVETRAN_DESTINATION: ${{ env.FIVETRAN_DEV_DESTINATION }}
+          FIVETRAN_CONNECTION: ${{ env.HELLO_DEV }}
+        run: |
+          echo "Deploying connector"
+          fivetran deploy --api-key $FIVETRAN_API_KEY --destination $FIVETRAN_DESTINATION --connection $FIVETRAN_CONNECTION --configuration configuration.json --force
+          echo "Successfully deployed $CONNECTION_NAME"
