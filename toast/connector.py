@@ -61,6 +61,7 @@ def sync_items(base_url, headers, ts_from, ts_to, start_timestamp, state):
     more_data = True
     first_pass = True   # indicates whether to call endpoints that don't have an end timestamp
 
+    # config endpoint is a list of tuples ("endpoint", "destination_table_name")
     config_endpoints = [("/config/v2/alternatePaymentTypes", "alternate_payment_types"),
                         ("/config/v2/diningOptions", "dining_option"),
                         ("/config/v2/discounts", "discounts"),
@@ -100,6 +101,9 @@ def sync_items(base_url, headers, ts_from, ts_to, start_timestamp, state):
                 r[new_name] = r.pop(old_name)
             log.info(f"***** starting restaurant {id}, {index + 1} of {restaurant_count} ***** ")
             yield op.upsert(table="restaurant", data=r)
+
+            if r.get("deleted") and "id" in r:
+                yield op.delete(table="restaurant", keys={"id": r["id"]})
 
             # config endpoints
             # only process these on the first pass since they don't have an end timestamp
@@ -152,6 +156,10 @@ def process_config(base_url, headers, endpoint, table_name, rst_id, timerange):
     headers["Toast-Restaurant-External-ID"] = rst_id
     more_data = True
     pagination = {}
+    # fields_to_extract is a mapping of fields to extract from source data.
+    # Keys represent table names, and values are lists of tuples.
+    # Each tuple defines a mapping for one or more fields in the table:
+    # (field containing a dictionary, key to extract from dictionary, new field name).
     fields_to_extract = {"menu_group": [("menu", "guid", "menu_id")],
                          "service_area": [("revenueCenter", "guid", "revenue_center_guid")],
                          "tables": [("revenueCenter", "guid", "revenue_center_guid"),
@@ -200,6 +208,10 @@ def process_labor(base_url, headers, endpoint, table_name, rst_id, params=None):
     params = params or {}
     headers["Toast-Restaurant-External-ID"] = rst_id
 
+    # fields_to_extract is a mapping of fields to extract from source data.
+    # Keys represent table names, and values are lists of tuples.
+    # Each tuple defines a mapping for one or more fields in the table:
+    # (field containing a dictionary, key to extract from dictionary, new field name).
     fields_to_extract = {
         "shift": [("employeeReference", "guid", "employee_reference_id"),
                   ("jobReference", "guid", "job_reference_id")],
@@ -254,6 +266,11 @@ def process_cash(base_url, headers, endpoint, table_name, rst_id, params):
     :return:
     """
     headers["Toast-Restaurant-External-ID"] = rst_id
+    # fields_to_flatten is a mapping of fields to flatten from source data.
+    # Keys represent table names, and values are lists of field names.
+    # The dictionary in each field should be used to create new fields, prefixed by the original field name.
+    # e.g. "info": {"id": 1, "type": "foo"}
+    # would become {"info_id": 1, "info_type": "foo} and the "info" key will be popped
     fields_to_flatten = {
         "cash_deposit": ["employee", "creator"],
         "cash_entry": ["approverOrShiftReviewSubject", "creatorOrShiftReviewSubject", "cashDrawer",
@@ -295,7 +312,10 @@ def process_orders(base_url, headers, endpoint, table_name, rst_id, params):
     params = params.copy()  # Avoid modifying original params
     params.update({"pageSize": 100, "page": 1})  # Set pagination defaults
 
+    # flatten these fields, e.g. "info": {"id": 1, "type": "foo"}
+    # would become {"info_id": 1, "info_type": "foo} and the "info" key will be popped
     fields_to_flatten = ["server", "createdDevice", "lastModifiedDevice"]
+    # extract guids from these fields, make a new field ending in _guid, and pop the original
     fields_extract_ids = ["diningOption", "table", "serviceArea", "revenueCenter"]
 
     try:
@@ -345,7 +365,8 @@ def process_payments(order):
     and its children.
     :param order: a single order dictionary
     """
-
+    # flatten these fields, e.g. "info": {"id": 1, "type": "foo"}
+    # would become {"info_id": 1, "info_type": "foo} and the "info" key will be popped
     fields_to_flatten = ["cashDrawer", "createdDevice", "lastModifiedDevice", "otherPayment", "refund", "server"]
     if "checks" in order and order["checks"]:
         yield from process_child(order["checks"], "orders_check", "orders_id", order["guid"])
@@ -409,8 +430,11 @@ def process_child (parent, table_name, id_field_name, id_field):
              ("triggers", "orders_check_selection_applied_discount_trigger")]
                      }
 
-    # dictionary of connector tables and dictionary fields that should be flattened
-    # e.g. {"table_name": ["fieldOne", "fieldTwo"]}
+    # fields_to_flatten is a mapping of fields to flatten from source data.
+    # Keys represent table names, and values are lists of field names.
+    # The dictionary in each field should be used to create new fields, prefixed by the original field name.
+    # e.g. "info": {"id": 1, "type": "foo"}
+    # would become {"info_id": 1, "info_type": "foo} and the "info" key will be popped
     fields_to_flatten = {
         "break": ["breakType"],
         "employee_wage_override": ["jobReference"],
@@ -766,7 +790,6 @@ def schema(configuration: dict):
         raise ValueError("Could not find 'key' in configs")
 
     return [
-
         {"table": "restaurant","primary_key": ["id"]},
         # labor tables
         {"table": "job", "primary_key": ["id"],
