@@ -18,129 +18,6 @@ from fivetran_connector_sdk import Connector # For supporting Connector operatio
 from fivetran_connector_sdk import Operations as op # For supporting Data operations like Upsert(), Update(), Delete() and checkpoint()
 from fivetran_connector_sdk import Logging as log # For enabling Logs in your connector code
 
-
-def schema(configuration: dict):
-    """
-    # Define the schema function which lets you configure the schema your connector delivers.
-    # See the technical reference documentation for more details on the schema function:
-    # https://fivetran.com/docs/connectors/connector-sdk/technical-reference#schema
-    :param configuration: a dictionary that holds the configuration settings for the connector.
-    :return: a list of tables with primary keys and any datatypes that we want to specify
-    """
-    if 'key' not in configuration:
-        raise ValueError("Could not find 'key' in configs")
-
-    return [
-
-        {"table": "restaurant","primary_key": ["id"]},
-        # labor tables
-        {"table": "job", "primary_key": ["id"],
-            "columns": {"createdDate": "UTC_DATETIME",
-                        "deletedDate": "UTC_DATETIME",
-                        "modifiedDate": "UTC_DATETIME",
-                        "deleted": "BOOLEAN",
-                        "excludeFromReporting": "BOOLEAN",
-                        "tipped": "BOOLEAN"}},
-        {"table": "shift", "primary_key": ["id"],
-            "columns": {"createdDate": "UTC_DATETIME",
-                        "inDate": "UTC_DATETIME",
-                        "modifiedDate": "UTC_DATETIME",
-                        "outDate": "UTC_DATETIME",
-                        "deleted": "BOOLEAN"}},
-        {"table": "employee", "primary_key": ["id"],
-            "columns": {"createdDate": "UTC_DATETIME",
-                        "deletedDate": "UTC_DATETIME",
-                        "modifiedDate": "UTC_DATETIME", "deleted": "BOOLEAN"}},
-        {"table": "employee_job_reference", "primary_key": ["id", "employee_id"]},
-        {"table": "employee_wage_override", "primary_key": ["id", "employee_id"]},
-        {"table": "time_entry", "primary_key": ["id"],
-            "columns": {"createdDate": "UTC_DATETIME",
-                        "deletedDate": "UTC_DATETIME",
-                        "inDate": "UTC_DATETIME",
-                        "modifiedDate": "UTC_DATETIME",
-                        "outDate": "UTC_DATETIME",
-                        "autoClockedOut": "BOOLEAN",
-                        "deleted": "BOOLEAN"}},
-        {"table": "break", "primary_key": ["id"],
-            "columns": {"inDate": "UTC_DATETIME", "outDate": "UTC_DATETIME",
-                        "auditResponse": "BOOLEAN",
-                        "missed": "BOOLEAN"}},
-        # cash tables
-        {"table": "cash_deposit", "primary_key": ["id"],
-            "columns": {"date": "UTC_DATETIME"}},
-        {"table": "cash_entry", "primary_key": ["id"],
-            "columns": {"date": "UTC_DATETIME"}},
-        # config tables
-        {"table": "alternate_payment_types", "primary_key": ["id"]},
-        {"table": "dining_option", "primary_key": ["id"], "columns": {"curbside": "BOOLEAN"}},
-        {"table": "discounts", "primary_key": ["id"],
-            "columns":{"active": "BOOLEAN", "nonExclusive": "BOOLEAN"}},
-        {"table": "menu", "primary_key": ["id"]},
-        {"table": "menu_group", "primary_key": ["id"]},
-        {"table": "menu_item", "primary_key": ["id"],
-            "columns": {"inheritOptionGroups": "BOOLEAN", "inheritUnitOfMeasure": "BOOLEAN"}},
-        {"table": "restaurant_service", "primary_key": ["id"]},
-        {"table": "revenue_center", "primary_key": ["id"]},
-        {"table": "sale_category", "primary_key": ["id"]},
-        {"table": "service_area", "primary_key": ["id"]},
-        {"table": "tables", "primary_key": ["id"]},
-        # orders tables
-        {"table": "orders", "primary_key":["id"],
-            "columns": {"closedDate": "UTC_DATETIME",
-                        "createdDate": "UTC_DATETIME",
-                        "deletedDate": "UTC_DATETIME",
-                        "estimatedFulfillmentDate": "UTC_DATETIME",
-                        "modifiedDate": "UTC_DATETIME",
-                        "openedDate": "UTC_DATETIME",
-                        "paidDate": "UTC_DATETIME",
-                        "promisedDate": "UTC_DATETIME",
-                        "voidDate": "UTC_DATETIME",
-                        "createdInTestMode": "BOOLEAN",
-                        "deleted": "BOOLEAN",
-                        "excessFood": "BOOLEAN",
-                        "voided": "BOOLEAN"}},
-        {"table": "orders_check", "primary_key":["id"],
-            "columns": {"closedDate": "UTC_DATETIME",
-                        "createdDate": "UTC_DATETIME",
-                        "deletedDate": "UTC_DATETIME",
-                        "modifiedDate": "UTC_DATETIME",
-                        "openedDate": "UTC_DATETIME",
-                        "paidDate": "UTC_DATETIME",
-                        "voidDate": "UTC_DATETIME",
-                        "deleted": "BOOLEAN",
-                        "taxExempt": "BOOLEAN",
-                        "voided": "BOOLEAN"}},
-        {"table": "orders_check_applied_discount", "primary_key":["id"]},
-        {"table": "orders_check_applied_discount_combo_item", "primary_key":["id"]},
-        {"table": "orders_check_applied_discount_trigger", "primary_key": ["orders_check_applied_discount_id"]},
-        {"table": "orders_check_applied_service_charge", "primary_key":["id", "orders_check_id"],
-         "columns": {"delivery": "BOOLEAN",
-                    "dineIn": "BOOLEAN",
-                    "gratuity": "BOOLEAN",
-                    "takeout": "BOOLEAN",
-                    "taxable": "BOOLEAN"}},
-        {"table": "orders_check_payment", "primary_key": ["orders_check_id", "payment_id", "orders_guid"]},
-        {"table": "orders_check_selection", "primary_key":["id", "orders_check_id"],
-            "columns": {"createdDate": "UTC_DATETIME",
-                        "modifiedDate": "UTC_DATETIME",
-                        "voidDate": "UTC_DATETIME",
-                        "deferred": "BOOLEAN",
-                        "voided": "BOOLEAN"}},
-        {"table": "orders_check_selection_applied_discount", "primary_key": ["id"]},
-        {"table": "orders_check_selection_applied_discount_trigger", "primary_key": ["orders_check_selection_applied_discount_id"]},
-        {"table": "orders_check_selection_applied_tax", "primary_key":["id", "orders_check_selection_id"]},
-        {"table": "orders_check_selection_modifier", "primary_key":["id", "orders_check_selection_id"],
-             "columns": {"createdDate": "UTC_DATETIME",
-                        "modifiedDate": "UTC_DATETIME",
-                        "voidDate": "UTC_DATETIME",
-                         "deferred": "BOOLEAN"}},
-        {"table": "orders_pricing_feature", "primary_key":["orders_id"]},
-        {"table": "payment", "primary_key": ["id"],
-            "columns": {"paidDate": "UTC_DATETIME",
-                        "refundDate": "UTC_DATETIME",
-                        "void_info_date": "UTC_DATETIME"}}
-    ]
-
 def update(configuration: dict, state: dict):
     """
     # Define the update function, which is a required function, and is called by Fivetran during each sync.
@@ -572,6 +449,10 @@ def process_child (parent, table_name, id_field_name, id_field):
         p = stringify_lists(p)
         p = replace_guid_with_id(p)
         yield op.upsert(table=table_name, data=p)
+        # need to also handle deletes here, for child tables and their children (e.g. orders_check and orders_check_selection)
+
+        if p.get("deleted") and "id" in p:
+            yield op.delete(table=table_name, keys={"id": p["id"]})
 
 def process_void_info(payment):
     """
@@ -590,7 +471,6 @@ def process_void_info(payment):
             payment["void_info_reason_entity_type"] = payment["voidInfo"]["voidReason"]["entityType"]
             payment["void_info_reason_guid"] = payment["voidInfo"]["voidReason"]["guid"]
         payment.pop("voidInfo", None)
-
 
 def make_headers(conf, base_url, state, key):
     """
@@ -873,6 +753,128 @@ def extract_fields(fields: list, row: dict):
             row.pop(field, None)
 
     return row
+
+def schema(configuration: dict):
+    """
+    # Define the schema function which lets you configure the schema your connector delivers.
+    # See the technical reference documentation for more details on the schema function:
+    # https://fivetran.com/docs/connectors/connector-sdk/technical-reference#schema
+    :param configuration: a dictionary that holds the configuration settings for the connector.
+    :return: a list of tables with primary keys and any datatypes that we want to specify
+    """
+    if 'key' not in configuration:
+        raise ValueError("Could not find 'key' in configs")
+
+    return [
+
+        {"table": "restaurant","primary_key": ["id"]},
+        # labor tables
+        {"table": "job", "primary_key": ["id"],
+            "columns": {"createdDate": "UTC_DATETIME",
+                        "deletedDate": "UTC_DATETIME",
+                        "modifiedDate": "UTC_DATETIME",
+                        "deleted": "BOOLEAN",
+                        "excludeFromReporting": "BOOLEAN",
+                        "tipped": "BOOLEAN"}},
+        {"table": "shift", "primary_key": ["id"],
+            "columns": {"createdDate": "UTC_DATETIME",
+                        "inDate": "UTC_DATETIME",
+                        "modifiedDate": "UTC_DATETIME",
+                        "outDate": "UTC_DATETIME",
+                        "deleted": "BOOLEAN"}},
+        {"table": "employee", "primary_key": ["id"],
+            "columns": {"createdDate": "UTC_DATETIME",
+                        "deletedDate": "UTC_DATETIME",
+                        "modifiedDate": "UTC_DATETIME", "deleted": "BOOLEAN"}},
+        {"table": "employee_job_reference", "primary_key": ["id", "employee_id"]},
+        {"table": "employee_wage_override", "primary_key": ["id", "employee_id"]},
+        {"table": "time_entry", "primary_key": ["id"],
+            "columns": {"createdDate": "UTC_DATETIME",
+                        "deletedDate": "UTC_DATETIME",
+                        "inDate": "UTC_DATETIME",
+                        "modifiedDate": "UTC_DATETIME",
+                        "outDate": "UTC_DATETIME",
+                        "autoClockedOut": "BOOLEAN",
+                        "deleted": "BOOLEAN"}},
+        {"table": "break", "primary_key": ["id"],
+            "columns": {"inDate": "UTC_DATETIME", "outDate": "UTC_DATETIME",
+                        "auditResponse": "BOOLEAN",
+                        "missed": "BOOLEAN"}},
+        # cash tables
+        {"table": "cash_deposit", "primary_key": ["id"],
+            "columns": {"date": "UTC_DATETIME"}},
+        {"table": "cash_entry", "primary_key": ["id"],
+            "columns": {"date": "UTC_DATETIME"}},
+        # config tables
+        {"table": "alternate_payment_types", "primary_key": ["id"]},
+        {"table": "dining_option", "primary_key": ["id"], "columns": {"curbside": "BOOLEAN"}},
+        {"table": "discounts", "primary_key": ["id"],
+            "columns":{"active": "BOOLEAN", "nonExclusive": "BOOLEAN"}},
+        {"table": "menu", "primary_key": ["id"]},
+        {"table": "menu_group", "primary_key": ["id"]},
+        {"table": "menu_item", "primary_key": ["id"],
+            "columns": {"inheritOptionGroups": "BOOLEAN", "inheritUnitOfMeasure": "BOOLEAN"}},
+        {"table": "restaurant_service", "primary_key": ["id"]},
+        {"table": "revenue_center", "primary_key": ["id"]},
+        {"table": "sale_category", "primary_key": ["id"]},
+        {"table": "service_area", "primary_key": ["id"]},
+        {"table": "tables", "primary_key": ["id"]},
+        # orders tables
+        {"table": "orders", "primary_key":["id"],
+            "columns": {"closedDate": "UTC_DATETIME",
+                        "createdDate": "UTC_DATETIME",
+                        "deletedDate": "UTC_DATETIME",
+                        "estimatedFulfillmentDate": "UTC_DATETIME",
+                        "modifiedDate": "UTC_DATETIME",
+                        "openedDate": "UTC_DATETIME",
+                        "paidDate": "UTC_DATETIME",
+                        "promisedDate": "UTC_DATETIME",
+                        "voidDate": "UTC_DATETIME",
+                        "createdInTestMode": "BOOLEAN",
+                        "deleted": "BOOLEAN",
+                        "excessFood": "BOOLEAN",
+                        "voided": "BOOLEAN"}},
+        {"table": "orders_check", "primary_key":["id"],
+            "columns": {"closedDate": "UTC_DATETIME",
+                        "createdDate": "UTC_DATETIME",
+                        "deletedDate": "UTC_DATETIME",
+                        "modifiedDate": "UTC_DATETIME",
+                        "openedDate": "UTC_DATETIME",
+                        "paidDate": "UTC_DATETIME",
+                        "voidDate": "UTC_DATETIME",
+                        "deleted": "BOOLEAN",
+                        "taxExempt": "BOOLEAN",
+                        "voided": "BOOLEAN"}},
+        {"table": "orders_check_applied_discount", "primary_key":["id"]},
+        {"table": "orders_check_applied_discount_combo_item", "primary_key":["id"]},
+        {"table": "orders_check_applied_discount_trigger", "primary_key": ["orders_check_applied_discount_id"]},
+        {"table": "orders_check_applied_service_charge", "primary_key":["id", "orders_check_id"],
+         "columns": {"delivery": "BOOLEAN",
+                    "dineIn": "BOOLEAN",
+                    "gratuity": "BOOLEAN",
+                    "takeout": "BOOLEAN",
+                    "taxable": "BOOLEAN"}},
+        {"table": "orders_check_payment", "primary_key": ["orders_check_id", "payment_id", "orders_guid"]},
+        {"table": "orders_check_selection", "primary_key":["id", "orders_check_id"],
+            "columns": {"createdDate": "UTC_DATETIME",
+                        "modifiedDate": "UTC_DATETIME",
+                        "voidDate": "UTC_DATETIME",
+                        "deferred": "BOOLEAN",
+                        "voided": "BOOLEAN"}},
+        {"table": "orders_check_selection_applied_discount", "primary_key": ["id"]},
+        {"table": "orders_check_selection_applied_discount_trigger", "primary_key": ["orders_check_selection_applied_discount_id"]},
+        {"table": "orders_check_selection_applied_tax", "primary_key":["id", "orders_check_selection_id"]},
+        {"table": "orders_check_selection_modifier", "primary_key":["id", "orders_check_selection_id"],
+             "columns": {"createdDate": "UTC_DATETIME",
+                        "modifiedDate": "UTC_DATETIME",
+                        "voidDate": "UTC_DATETIME",
+                         "deferred": "BOOLEAN"}},
+        {"table": "orders_pricing_feature", "primary_key":["orders_id"]},
+        {"table": "payment", "primary_key": ["id"],
+            "columns": {"paidDate": "UTC_DATETIME",
+                        "refundDate": "UTC_DATETIME",
+                        "void_info_date": "UTC_DATETIME"}}
+    ]
 
 # This creates the connector object that will use the update function defined in this connector.py file.
 connector = Connector(update=update, schema=schema)
