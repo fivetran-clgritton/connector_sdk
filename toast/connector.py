@@ -127,13 +127,12 @@ def sync_items(base_url, headers, ts_from, ts_to, start_timestamp, state):
             yield from process_labor(base_url, headers, "/labor/v1/shifts", "shift", id, params=timerange_params)
             yield from process_labor(base_url, headers, "/labor/v1/timeEntries", "time_entry", id, params=modified_params)
 
-        first_pass = False
-
         # Save the progress by checkpointing the state. This is important for ensuring that the sync process can resume
         # from the correct position in case of interruptions.
         # checkpointing every 30 days for convenience,
         # since we can only ask for 30 days of shifts and time entries at a time
         yield op.checkpoint(state)
+        first_pass = False
 
         # Determine if we should continue pagination based on the total items and the current offset.
         if ts_to < start_timestamp:
