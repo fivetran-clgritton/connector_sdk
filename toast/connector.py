@@ -115,8 +115,6 @@ def sync_items(base_url, headers, ts_from, ts_to, start_timestamp, state):
                 for endpoint, table_name in [("/labor/v1/jobs", "job"),("/labor/v1/employees", "employee")]:
                     yield from process_labor(base_url, headers, endpoint, table_name, id)
 
-                first_pass = False
-
             # cash management endpoints
             yield from process_cash(base_url, headers, "/cashmgmt/v1/entries", "cash_entry", id, timerange_params)
             yield from process_cash(base_url, headers, "/cashmgmt/v1/deposits", "cash_deposit", id, timerange_params)
@@ -128,6 +126,8 @@ def sync_items(base_url, headers, ts_from, ts_to, start_timestamp, state):
             # these two endpoints can only retrieve 30 days at a time
             yield from process_labor(base_url, headers, "/labor/v1/shifts", "shift", id, params=timerange_params)
             yield from process_labor(base_url, headers, "/labor/v1/timeEntries", "time_entry", id, params=modified_params)
+
+        first_pass = False
 
         # Save the progress by checkpointing the state. This is important for ensuring that the sync process can resume
         # from the correct position in case of interruptions.
