@@ -18,16 +18,15 @@ import requests
 # - state: a dictionary contains whatever state you have chosen to checkpoint during the prior sync
 # The state dictionary is empty for the first sync or for any full re-sync
 def update(configuration: dict, state: dict):
-    log.warning("Example: QuickStart Examples - Hello")
 
     # The yield statement returns a generator object.
     # This generator will yield an upsert operation to the Fivetran connector.
     # The op.upsert method is called with two arguments:
     # - The first argument is the name of the table to upsert the data into, in this case, "hello".
     # - The second argument is a dictionary containing the data to be upserted,
-    log.fine(f"upserting to table 'hello'")
-    d = {"message": "hello, world!"}
-    yield op.upsert(table="hello", data=d)
+    log.fine(f"upserting to table 'column_order'")
+    d = {"col_01": "one", "col_02": "two", "col_03": "3", "col_04": "4", "col_05": "five", "col_06": "six"}
+    yield op.upsert(table="column_order", data=d)
 
     # Save the progress by checkpointing the state. This is important for ensuring that the sync process can resume
     # from the correct position in case of next sync or interruptions.

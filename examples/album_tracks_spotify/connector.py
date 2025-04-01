@@ -48,10 +48,8 @@ def update(configuration: dict, state: dict):
         client_secret = conf['client_secret']
         artist_url = conf['artist_url']
         album_params = {"artist_id": artist_url, "include_groups": "album"}
-        log.info("hello world")
         auth_manager = SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
-        log.info("hi")
-        sp = spotipy.Spotify(auth_manager=auth_manager)
+        sp = spotipy.Spotify(auth_manager=auth_manager, retries=3, status_retries=3, backoff_factor=0.3)
 
         yield from sync_items(sp, album_params)
 
@@ -67,7 +65,6 @@ def update(configuration: dict, state: dict):
 # - obj: The spotify connection object.
 # - payload: A dictionary of query parameters send with the method, if needed
 def sync_items(obj, payload):
-    log.info("hello world again")
     try:
     # For this artist, get one page of albums in a response from the API call.
         albums_page = get_api_response(obj, "artist_albums", payload)
@@ -108,13 +105,21 @@ def sync_items(obj, payload):
 # Returns:
 # - response_page: A dictionary containing the parsed JSON response from the API.
 def get_api_response(obj, method_name, payload=None):
-    if payload is None:
-        payload = {}
-    method = getattr(obj, method_name)
-    log.info(f"getting API response with {payload}")
-    response_page = method(**payload)
-    log.info(response_page)
-    return response_page
+    try:
+        if payload is None:
+            payload = {}
+        method = getattr(obj, method_name)
+        log.info(f"getting API response with {payload}")
+        response_page = method(**payload)
+        log.info(response_page.status_code)
+        return response_page
+
+    except Exception as e:
+        # Return error response
+        exception_message = str(e)
+        stack_trace = traceback.format_exc()
+        detailed_message = f"Error Message: {exception_message}\nStack Trace:\n{stack_trace}"
+        raise RuntimeError(detailed_message)
 
 # The remove_lists function removes keys from a dictionary if the value is a list
 #

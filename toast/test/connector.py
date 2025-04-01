@@ -1,20 +1,19 @@
-"""
-This is an example to extract data from Toast, technology platform primarily designed for the restaurant industry.
-It provides an all-in-one point-of-sale (POS) and management system tailored to meet the unique needs
-of restaurants, cafes, and similar businesses.
-See the Technical Reference documentation (https://fivetran.com/docs/connectors/connector-sdk/technical-reference#update)
-and the Best Practices documentation (https://fivetran.com/docs/connectors/connector-sdk/best-practices) for details
-"""
 
+# See the Technical Reference documentation (https://fivetran.com/docs/connectors/connector-sdk/technical-reference#update)
+# and the Best Practices documentation (https://fivetran.com/docs/connectors/connector-sdk/best-practices) for details
+
+# Import requests to make HTTP calls to API
 import requests as rq
 import traceback
 from datetime import datetime, timezone, timedelta
 import time
 import json
 import copy
+# uuid needed for generating guids for orders_check_selection_applied_tax
 import uuid
 from cryptography.fernet import Fernet
 
+# Import required classes from fivetran_connector_sdk
 from fivetran_connector_sdk import Connector # For supporting Connector operations like Update() and Schema()
 from fivetran_connector_sdk import Operations as op # For supporting Data operations like Upsert(), Update(), Delete() and checkpoint()
 from fivetran_connector_sdk import Logging as log # For enabling Logs in your connector code
@@ -60,7 +59,7 @@ def sync_items(base_url, headers, ts_from, ts_to, start_timestamp, state):
     :return:
     """
     more_data = True
-    first_pass = False   # indicates whether to call endpoints that don't have an end timestamp
+    first_pass = True   # indicates whether to call endpoints that don't have an end timestamp
 
     # config endpoint is a list of tuples ("endpoint", "destination_table_name")
     config_endpoints = [("/config/v2/alternatePaymentTypes", "alternate_payment_types"),
@@ -452,15 +451,19 @@ def process_child (parent, table_name, id_field_name, id_field):
     for p in parent:
         #log.fine(f"processing {table_name}")
         p[id_field_name] = id_field
+        parent_deleted = p.get("deleted", False)
         if table_name in relationships:
             for child_key, child_table_name in relationships[table_name]:
-                if len(p.get(child_key, [])) > 0:
+                if len(p.get(child_key, [])) > 0:  # Use .get() to handle missing keys gracefully
                     yield from process_child(
                         p[child_key],
                         child_table_name,
                         table_name + "_id",
                         p["guid"]
                     )
+                if parent_deleted:
+                    log.fine(f"deleting {p[child_key]} from {child_table_name}")
+                    yield op.delete(table=child_table_name, keys={p[child_key]: p["guid"]})
                 p.pop(child_key, None)
         if table_name in fields_to_flatten:
             #log.fine(f"flattening fields in {table_name}")
@@ -473,45 +476,27 @@ def process_child (parent, table_name, id_field_name, id_field):
         p = stringify_lists(p)
         p = replace_guid_with_id(p)
         yield op.upsert(table=table_name, data=p)
+
         if p.get("deleted") and "id" in p:
             yield op.delete(table=table_name, keys={"id": p["id"]})
 
 def process_void_info(payment):
     """
     Processing payment["voidInfo"], heavily nested field that seemed easier to handle this way
-    May revisit in the future.
+    May revisit in the future
     :param payment: single payment record
     :return:
     """
-    void_info = payment.get("voidInfo")  # Get voidInfo safely
-
-    if void_info:  # Ensure voidInfo exists
-        # Check for voidApprover and safely access guid
-        if void_info.get("voidApprover") and void_info["voidApprover"].get("guid"):
-            payment["void_info_approver_guid"] = void_info["voidApprover"]["guid"]
-
-        # Check for voidBusinessDate
-        if void_info.get("voidBusinessDate"):
-            payment["void_info_business_date"] = void_info["voidBusinessDate"]
-
-        # Check for voidDate
-        if void_info.get("voidDate"):
-            payment["void_info_date"] = void_info["voidDate"]
-
-        # Check for voidUser
-        if void_info.get("voidUser") and void_info["voidUser"].get("guid"):
-            payment["void_info_user_guid"] = void_info["voidUser"]["guid"]
-
-        # Check for voidReason
-        if void_info.get("voidReason"):
-            if void_info["voidReason"].get("entityType"):
-                payment["void_info_reason_entity_type"] = void_info["voidReason"]["entityType"]
-            if void_info["voidReason"].get("guid"):
-                payment["void_info_reason_guid"] = void_info["voidReason"]["guid"]
-
-        # Remove voidInfo after processing
+    if payment.get("voidInfo"):
+        payment["void_info_approver_guid"] = payment["voidInfo"]["voidApprover"]["guid"]
+        payment["void_info_business_date"] = payment["voidInfo"]["voidBusinessDate"]
+        payment["void_info_date"] = payment["voidInfo"]["voidDate"]
+        if payment["voidInfo"].get("voidUser"):
+            payment["void_info_user_guid"] = payment["voidInfo"]["voidUser"]["guid"]
+        if payment["voidInfo"].get("voidReason"):
+            payment["void_info_reason_entity_type"] = payment["voidInfo"]["voidReason"]["entityType"]
+            payment["void_info_reason_guid"] = payment["voidInfo"]["voidReason"]["guid"]
         payment.pop("voidInfo", None)
-
 
 def make_headers(conf, base_url, state, key):
     """

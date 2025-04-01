@@ -11,12 +11,8 @@ import json  # Import the json module to handle JSON data.
 from fivetran_connector_sdk import Connector
 from fivetran_connector_sdk import Operations as op
 from fivetran_connector_sdk import Logging as log
+import gcsfs
 
-TABLE_NAME = "test_rows"
-# Define ODBC connection parameters
-DSN = 'sage_50'  # ODBC Data Source Name
-USER = 'Manager'        # If authentication is required, provide username
-PASSWORD = ''    # Provide password if needed
 
 # Define the schema function, which lets you configure the schema your connector delivers.
 # See the technical reference documentation for more details on the schema function:
@@ -35,7 +31,13 @@ def schema(configuration: dict):
     return []
 
 def create_connection(configuration):
-    conn = pyodbc.connect(f'DSN={DSN};')
+    conn = pyodbc.connect(f'DSN={configuration["DSN"]};UID={configuration["user"]};PWD={configuration["password"]}')
+
+    #conn_str = (
+    #    f'DRIVER=Sage Line 50 v28 ODBC 32-bit;UID={configuration["user"]};PWD={configuration["password"]};'
+    #    f'CompanyFile=C:\\Path\\To\\Sage\\Company.001\\ACCDATA;'
+    #)
+    #conn = pyodbc.connect(conn_str)
     cursor = conn.cursor()
     print("Connected to Sage 50 ODBC successfully.")
 
@@ -52,21 +54,39 @@ def create_connection(configuration):
 def update(configuration: dict, state: dict):
     db_cursor = create_connection(configuration)
 
-    db_cursor.execute(f"SELECT * FROM {TABLE_NAME}")
-    while True:
-        rows = db_cursor.fetchmany(2)
-        rows_json = [dict(row) for row in rows]
-        if len(rows) == 0:
-            break
+    if state.get("tables"):
+        tables=state["tables"]
+    else:
+        tables = [row.table_name for row in db_cursor.tables(tableType='TABLE')]
+        log.fine(str(tables))
 
-        for row in rows_json:
-            yield op.upsert(table=TABLE_NAME, data=row)
+    for t in tables:
+        log.fine(f"Processing table: {t}")
+
+        db_cursor.execute(f"SELECT * FROM {t}")
+        row_count = db_cursor.rowcount
+        log.fine(f"Table {t} has {row_count} rows")
+        columns = [col[0] for col in db_cursor.description]
+        #log.fine(str(columns))# Get column names
+        batch_size = 100
+
+        while True:
+            rows = db_cursor.fetchmany(batch_size)  # Fetch rows in batches
+            if not rows:
+                break  # Exit when no more rows are left
+
+            for row in rows:
+                row_dict = dict(zip(columns, row))  # Convert row to dictionary
+                yield op.upsert(table=t, data=row_dict)  # Stream the result
+
+        tables.remove(t)
+        state["tables"] = tables
+        yield op.checkpoint(state)
 
     # Save the progress by checkpointing the state. This is important for ensuring that the sync process can resume
     # from the correct position in case of next sync or interruptions.
     # Learn more about how and where to checkpoint by reading our best practices documentation
     # (https://fivetran.com/docs/connectors/connector-sdk/best-practices#largedatasetrecommendation).
-    yield op.checkpoint(state)
 
 
 # This creates the connector object that will use the update function defined in this connector.py file.

@@ -80,6 +80,13 @@ def sync_items(configuration: dict, state: dict, headers: dict, extract: dict):
     log.info(status)
     status_endpoint = f"/tax/v1/organization-tax-data/processing-jobs/{response_id}/processing-status?processName=DATA_EXTRACT"
 
+    layout_name = next(
+        (tag["tagValues"][0] for tag in extract.get("processDefinitionTags", [])
+         if tag.get("tagCode") == "LAYOUT_NAME"),
+        None  # Default if not found
+    ).lower()
+    pks = get_primary_keys(configuration, layout_name)
+
     while not complete:
         sleep(10)
         log.info(f"checking export status for {conversation_id}")
@@ -98,31 +105,46 @@ def sync_items(configuration: dict, state: dict, headers: dict, extract: dict):
 
     print(f"ZIP file extracted to: {extract_path}")
 
-    layout_name = next(
-        (tag["tagValues"][0] for tag in extract.get("processDefinitionTags", [])
-         if tag.get("tagCode") == "LAYOUT_NAME"),
-        None  # Default if not found
-    )
-    matching_files = [fn for fn in os.listdir(extract_path) if layout_name in fn]
+    matching_files = [fn for fn in os.listdir(extract_path) if layout_name.upper() in fn]
     for m in matching_files:
         log.fine(f"processing {m}")
-        yield from upsert_rows(f"{extract_path}{m}", layout_name)
+        yield from upsert_rows(f"{extract_path}{m}", layout_name, pks)
 
     # Save the progress by checkpointing the state. This is important for ensuring that the sync process can resume
     # from the correct position in case of interruptions.
     yield op.checkpoint(state)
 
 
-def upsert_rows(filename: str, layout_name: str):
+def upsert_rows(filename: str, layout_name: str, pks: list):
     # json_data = []
-    colnames = column_names[layout_name]
+    colnames = column_names[layout_name.upper()]
     log.fine(f"upserting rows for {filename}")
+
+
     with open(filename, "r", newline="", encoding="utf-8") as file:
         reader = csv.reader(file, delimiter="\t")  # Tab-delimited
 
         for row in reader:
-            yield op.upsert(table=layout_name, data=dict(zip(colnames, row)))
+            d = dict(zip(colnames, row))
+            sorted_keys = [k for k in sorted(d) if k not in pks]
+            primary_keys = [k for k in d if k in pks]
 
+            final_dict = {k: d[k] for k in primary_keys + sorted_keys}
+            log.fine(final_dict)
+            yield op.upsert(table=layout_name, data=final_dict)
+
+def get_primary_keys(conf: dict, table_name: str) -> list[str]:
+    """
+    returns defined primary keys from the schema
+    :param table_name:
+    :param data:
+    :return:
+    """
+    pks = schema(conf)
+    for item in pks:
+        if item.get("table") == table_name:
+            return item.get("primary_key", [])
+    return []  # Return empty list if table not found
 
 # The get_api_response function sends an HTTP GET request to the provided URL with the specified parameters.
 # It performs the following tasks:
